@@ -1,0 +1,73 @@
+# Node.js dependencies and package manager caches
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/install-state.gz
+
+# Build output and TypeScript incremental cache
+dist/
+build/
+*.tsbuildinfo
+
+# Test coverage and tool caches
+coverage/
+.nyc_output/
+.vitest/
+.eslintcache
+.prettiercache
+
+# Local environment variables and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+.aws/
+
+# Local database files, backups and Docker volume data
+.docker-data/
+docker-data/
+pgdata/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sql.gz
+*.dump
+
+# Prisma generated client (when using a custom output directory)
+/generated/prisma/
+/src/generated/prisma/
+
+# Logs and temporary output
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+tmp/
+temp/
+*.tmp
+
+# Local editor and operating system files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+~$*
+
+# Local submission archives
+/*_submission.zip
+/[0-9]*_[0-9]*.zip
