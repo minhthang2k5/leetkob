@@ -1,21 +1,21 @@
 # LeeTKOB Backend Service (PA#2)
 
-Backend service for **LeeTKOB** — C++ Lab Grading and Constraint Verification Platform.  
+Backend service for LeeTKOB — C++ Lab Grading and Constraint Verification Platform.  
 Built for CSC13114 (PA#2: Harness and Quality Gate) implementing `POST /v1/labs/:labId/publish`.
 
 ---
 
-## 🛠 Tech Stack
-- **Runtime**: Node.js v20+ LTS / TypeScript 5.6 (strict mode)
-- **Framework**: Express.js 4.x
-- **Database**: PostgreSQL 16
-- **ORM & Migrations**: Prisma ORM 5.x
-- **Testing Engine**: Vitest 2.x + Supertest 7.x
-- **Code Quality**: ESLint 8.x + Prettier 3.x
+## Tech Stack
+- Runtime: Node.js v20+ LTS / TypeScript 5.6 (strict mode)
+- Framework: Express.js 4.x
+- Database: PostgreSQL 16
+- ORM & Migrations: Prisma ORM 5.x
+- Testing Engine: Vitest 2.x + Supertest 7.x
+- Code Quality: ESLint 8.x + Prettier 3.x
 
 ---
 
-## 🚀 Quickstart Guide (Local Development)
+## Quickstart Guide (Local Development)
 
 ### 1. Install Dependencies
 ```bash
@@ -55,7 +55,7 @@ curl http://localhost:3000/health
 
 ---
 
-## 🧪 Quality Gate Verification Commands
+## Quality Gate Verification Commands
 
 Per PA#2 project conventions, each check is run via a single, non-interactive command:
 
@@ -75,7 +75,7 @@ npm test
 
 ---
 
-## 📋 14 Contract Test Coverage Matrix
+## 14 Contract Test Coverage Matrix
 
 All 14 tests strictly map to `docs/contract/publish-test-cases.md`:
 
@@ -98,7 +98,7 @@ All 14 tests strictly map to `docs/contract/publish-test-cases.md`:
 
 ---
 
-## 📑 Documentation Links
+## Documentation Links
 - API Contract Specification: [`../docs/contract/publish.md`](../docs/contract/publish.md)
 - Detailed Test Checklist: [`../docs/contract/publish-test-cases.md`](../docs/contract/publish-test-cases.md)
 - Postman Collection: [`../docs/postman/LeeTKOB_PA2_Publish.postman_collection.json`](../docs/postman/LeeTKOB_PA2_Publish.postman_collection.json)

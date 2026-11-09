@@ -6,23 +6,23 @@
 [![Prisma](https://img.shields.io/badge/Prisma-5.21-indigo.svg)](https://www.prisma.io/)
 [![RFC 9457](https://img.shields.io/badge/RFC%209457-Problem%20Details-orange.svg)](https://datatracker.ietf.org/doc/html/rfc9457)
 
-> **Course**: CSC13114 · Class 2609-AWAD-23/3  
-> **Milestone**: PA#2 — Harness and Quality Gate  
-> **Authors**: Team LeeTKOB (Product Owners: Lê Tấn Hiệp, Tống Dương Thái Hoà, Nguyễn Phúc Hoàng)
+Course: CSC13114 · Class 2609-AWAD-23/3  
+Milestone: PA#2 — Harness and Quality Gate  
+Authors: Team LeeTKOB (Product Owners: Le Tan Hiep, Tong Duong Thai Hoa, Nguyen Phuc Hoang)
 
 ---
 
-## 📖 1. About the Project
+## 1. About the Project
 
-**LeeTKOB** is an automated grading and semantic constraint review platform for introductory C++ programming labs. It eliminates wrongful deductions by combining deterministic AST-level hard rules with an LLM judge, protected by a strict **Human Gate**:
+LeeTKOB is an automated grading and semantic constraint review platform for introductory C++ programming labs. It eliminates wrongful deductions by combining deterministic AST-level hard rules with an LLM judge, protected by a strict Human Gate:
 
-- **Accepted C++ submissions** undergo automated constraint checks returning `pass`, `violation`, or `unsure`.
-- **The Human Gate**: Marks are **never** published automatically. 100% of `violation` verdicts, 100% of `unsure` verdicts, and a random 10% audit sample of `pass` verdicts are queued for Teaching Assistant (TA) review.
-- **Publication Endpoint**: Marks can only be released when an authorized TA verifies all required reviews and triggers `POST /v1/labs/{labId}/publish`.
+- Accepted C++ submissions undergo automated constraint checks returning pass, violation, or unsure.
+- The Human Gate: Marks are never published automatically. 100% of violation verdicts, 100% of unsure verdicts, and a random 10% audit sample of pass verdicts are queued for Teaching Assistant (TA) review.
+- Publication Endpoint: Marks can only be released when an authorized TA verifies all required reviews and triggers `POST /v1/labs/{labId}/publish`.
 
 ---
 
-## 🏗️ 2. Repository Architecture
+## 2. Repository Architecture
 
 All application source code, tests, and database management are encapsulated inside the `backend/` directory:
 
@@ -71,25 +71,25 @@ leetkob/
 
 ---
 
-## ⚡ 3. The 4 Deterministic Quality Gate Checks
+## 3. The 4 Deterministic Quality Gate Checks
 
 Per project rules and rubric requirements, each quality gate is triggered via a single, non-interactive command inside `backend/`:
 
 | Check | Command | Description |
 |---|---|---|
-| **Linting** | `npm run lint` | Runs `eslint src tests --ext .ts` without hanging. |
-| **Formatting** | `npm run format:check` | Verifies style compliance with `prettier --check`. |
-| **Type Checking** | `npm run typecheck` | Validates strict static typing with `tsc --noEmit`. |
-| **Contract Testing** | `npm test` | Executes all 14 contract tests via `vitest run` (exit code 0/1). |
+| Linting | `npm run lint` | Runs `eslint src tests --ext .ts` without hanging. |
+| Formatting | `npm run format:check` | Verifies style compliance with `prettier --check`. |
+| Type Checking | `npm run typecheck` | Validates strict static typing with `tsc --noEmit`. |
+| Contract Testing | `npm test` | Executes all 14 contract tests via `vitest run` (exit code 0/1). |
 
 ---
 
-## 🚀 4. Getting Started (Local Setup)
+## 4. Getting Started (Local Setup)
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) v20+ LTS
-- [Docker](https://www.docker.com/) & Docker Compose
-- [Git](https://git-scm.com/)
+- Node.js v20+ LTS
+- Docker & Docker Compose (or managed cloud PostgreSQL)
+- Git
 
 ### Step 1: Clone the repository
 ```bash
@@ -135,7 +135,7 @@ curl http://localhost:3000/health
 
 ---
 
-## 🧪 5. Running Contract Tests
+## 5. Running Contract Tests
 
 Run all 14 contract tests (covering Happy path, Admin role, Student 403, Ownership 403, UUID 400, Reviews Pending 409, Idempotency Replay, Concurrency, and Extensibility):
 
@@ -146,25 +146,25 @@ npm test
 
 Expected result:
 ```text
-✓ tests/contract/publish.contract.spec.ts (14 tests) 14 passed
+tests/contract/publish.contract.spec.ts (14 tests) 14 passed
 Tests  14 passed (14)
 Duration  ~1.2s
 ```
 
 ---
 
-## 📮 6. Postman Collection
+## 6. Postman Collection
 
-A complete Postman test suite is provided under [`docs/postman/`](docs/postman/):
-1. Open **Postman** $\rightarrow$ Click **Import**.
-2. Select [`docs/postman/LeeTKOB_PA2_Publish.postman_collection.json`](docs/postman/LeeTKOB_PA2_Publish.postman_collection.json).
-3. Select [`docs/postman/LeeTKOB_Local.postman_environment.json`](docs/postman/LeeTKOB_Local.postman_environment.json).
+A complete Postman test suite is provided under `docs/postman/`:
+1. Open Postman -> Click Import.
+2. Select `docs/postman/LeeTKOB_PA2_Publish.postman_collection.json`.
+3. Select `docs/postman/LeeTKOB_Local.postman_environment.json`.
 4. Run the collection. All 10 requests include automated test assertions verifying status codes, RFC 9457 problem schemas, and the `Idempotent-Replayed: true` header.
 
 ---
 
-## 📜 7. API Specification & Deliberate Break
+## 7. API Specification & Deliberate Break
 
-- **API Contract Specification**: Refer to [`docs/contract/publish.md`](docs/contract/publish.md).
-- **Deliberate Break Recipe**: Refer to [`backend/HANDOVER.md`](backend/HANDOVER.md) for instructions on deliberately breaking the contract to demonstrate CI quality gate enforcement.
-- **AI Coding Agent Rules**: Refer to [`AGENTS.md`](AGENTS.md).
+- API Contract Specification: Refer to `docs/contract/publish.md`.
+- Deliberate Break Recipe: Refer to `backend/HANDOVER.md` for instructions on deliberately breaking the contract to demonstrate CI quality gate enforcement.
+- AI Coding Agent Rules: Refer to `AGENTS.md`.
