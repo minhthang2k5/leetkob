@@ -1,0 +1,90 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  TA
+  ADMIN
+}
+
+enum LabStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum ReviewVerdict {
+  VIOLATION
+  UNSURE
+  PASS
+}
+
+model User {
+  id        String    @id @default(uuid())
+  name      String
+  role      Role
+  token     String    @unique
+  createdAt DateTime  @default(now())
+
+  // Classes where this user is assigned as TA
+  assignedClasses ClassTA[]
+
+  @@map("users")
+}
+
+model Class {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  createdAt DateTime  @default(now())
+
+  tas       ClassTA[]
+  labs      Lab[]
+
+  @@map("classes")
+}
+
+model ClassTA {
+  classId   String
+  userId    String
+
+  class     Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([classId, userId])
+  @@map("class_tas")
+}
+
+model Lab {
+  id          String             @id @default(uuid())
+  classId     String
+  title       String
+  status      LabStatus          @default(DRAFT)
+  publishedAt DateTime?
+  createdAt   DateTime           @default(now())
+
+  class       Class              @relation(fields: [classId], references: [id], onDelete: Cascade)
+  reviews     SubmissionReview[]
+
+  @@map("labs")
+}
+
+model SubmissionReview {
+  id           String        @id @default(uuid())
+  labId        String
+  submissionId String?
+  verdict      ReviewVerdict
+  isSampled    Boolean       @default(false)
+  isReviewed   Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+
+  lab          Lab           @relation(fields: [labId], references: [id], onDelete: Cascade)
+
+  @@map("submission_reviews")
+}
+
