@@ -22,3 +22,10 @@ Asked for: audit `docs/contract/publish.md` and `docs/contract/publish-test-case
 Kept: confirmation that the contract achieves the highest rubric band (21–25 pts) and covers the necessary deliberate break scenarios.  
 Changed: in the contract's processing order, Resource Existence (`404`) was initially checked before Role Validation (`403`). Changed to reject `STUDENT` callers with `403 Forbidden` immediately before database lookups, preventing an information disclosure oracle where students could probe valid lab UUIDs.  
 Rejected: initial 13 test cases lacked an extensibility test; added `CT-14` to explicitly test that unexpected request bodies are ignored without corrupting server state.
+
+## 2026-11-09 — Backend Implementation and Contract Test Suite (PA#2 N2 Package 2)
+Tool: Antigravity (Gemini 3.8 Flash).  
+Asked for: create `ROADMAP.md`, folder structure isolated in `backend/`, Express + TypeScript backend, Prisma schema & seed data, RFC 9457 Problem Details middlewares, core `POST /v1/labs/:labId/publish` endpoint, and full 14 contract tests in Vitest + Supertest.  
+Kept: `backend/` isolation, strict processing order enforcing role security before database lookup, atomic publication inside `prisma.$transaction`, and explicit verification of `Idempotent-Replayed: true` header.  
+Changed: moved `compose.yaml` into `backend/` directory as requested by N2; structured `src/app.ts` to export the Express instance without starting the listener, allowing Supertest to execute in-memory tests cleanly.  
+Rejected: combining dev and test databases into one schema; separated environment URLs in `.env.example` to ensure test runs never purge local development data.

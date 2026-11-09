@@ -1,0 +1,408 @@
+{
+  "info": {
+    "_postman_id": "b1a2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
+    "name": "LeeTKOB - PA2 Publish API",
+    "description": "Postman collection for LeeTKOB PA#2 endpoint: POST /v1/labs/:labId/publish\nCovers happy path, RFC 9457 error contracts, idempotency replay, and RBAC ownership checks.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "readyLabId",
+      "value": "550e8400-e29b-41d4-a716-446655440000",
+      "type": "string"
+    },
+    {
+      "key": "adminReadyLabId",
+      "value": "550e8400-e29b-41d4-a716-446655440001",
+      "type": "string"
+    },
+    {
+      "key": "pendingViolationLabId",
+      "value": "550e8400-e29b-41d4-a716-446655440002",
+      "type": "string"
+    },
+    {
+      "key": "pendingSampledPassLabId",
+      "value": "550e8400-e29b-41d4-a716-446655440003",
+      "type": "string"
+    },
+    {
+      "key": "alreadyPublishedLabId",
+      "value": "550e8400-e29b-41d4-a716-446655440004",
+      "type": "string"
+    },
+    {
+      "key": "tokenTaClassA",
+      "value": "token-ta-class-a",
+      "type": "string"
+    },
+    {
+      "key": "tokenTaClassB",
+      "value": "token-ta-class-b",
+      "type": "string"
+    },
+    {
+      "key": "tokenAdmin",
+      "value": "token-admin",
+      "type": "string"
+    },
+    {
+      "key": "tokenStudent",
+      "value": "token-student",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Happy Path - TA Publishes Completed Lab (200 OK)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tokenTaClassA}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/labs/{{readyLabId}}/publish",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "labs", "{{readyLabId}}", "publish"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Response matches LabPublishReceipt schema', function () {",
+              "    const json = pm.response.json();",
+              "    pm.expect(json).to.have.property('labId');",
+              "    pm.expect(json.status).to.eql('PUBLISHED');",
+              "    pm.expect(json).to.have.property('publishedAt');",
+              "});",
+              "pm.test('Idempotent-Replayed header is not present on initial publish', function () {",
+              "    pm.expect(pm.response.headers.get('Idempotent-Replayed')).to.be.undefined;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Admin Publishes Completed Lab (200 OK)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tokenAdmin}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/labs/{{adminReadyLabId}}/publish",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "labs", "{{adminReadyLabId}}", "publish"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Status is PUBLISHED', function () {",
+              "    const json = pm.response.json();",
+              "    pm.expect(json.status).to.eql('PUBLISHED');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Idempotent Replay - Calling Already Published Lab (200 OK)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tokenTaClassA}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/labs/{{alreadyPublishedLabId}}/publish",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "labs", "{{alreadyPublishedLabId}}", "publish"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Header Idempotent-Replayed is true', function () {",
+              "    pm.expect(pm.response.headers.get('Idempotent-Replayed')).to.eql('true');",
+              "});",
+              "pm.test('Timestamp remains 2026-11-08T06:00:00.000Z', function () {",
+              "    const json = pm.response.json();",
+              "    pm.expect(json.publishedAt).to.eql('2026-11-08T06:00:00.000Z');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Error - Missing Authorization (401 Unauthorized)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/v1/labs/{{readyLabId}}/publish",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "labs", "{{readyLabId}}", "publish"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 401', function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "pm.test('Content-Type is application/problem+json', function () {",
+              "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+              "});",
+              "pm.test('Problem code is UNAUTHORIZED', function () {",
+              "    const json = pm.response.json();",
+              "    pm.expect(json.code).to.eql('UNAUTHORIZED');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Error - Student Role Rejected (403 Forbidden)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tokenStudent}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/labs/{{readyLabId}}/publish",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "labs", "{{readyLabId}}", "publish"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 403', function () {",
+              "    pm.response.to.have.status(403);",
+              "});",
+              "pm.test('Problem code is FORBIDDEN', function () {",
+              "    const json = pm.response.json();",
+              "    pm.expect(json.code).to.eql('FORBIDDEN');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Error - TA Other Class Ownership Violation (403 Forbidden)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tokenTaClassB}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/labs/{{readyLabId}}/publish",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "labs", "{{readyLabId}}", "publish"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 403', function () {",
+              "    pm.response.to.have.status(403);",
+              "});",
+              "pm.test('Problem code is FORBIDDEN', function () {",
+              "    const json = pm.response.json();",
+              "    pm.expect(json.code).to.eql('FORBIDDEN');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Error - Non-existent Lab (404 Lab Not Found)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tokenTaClassA}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/labs/a0000000-0000-0000-0000-000000000000/publish",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "labs", "a0000000-0000-0000-0000-000000000000", "publish"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 404', function () {",
+              "    pm.response.to.have.status(404);",
+              "});",
+              "pm.test('Problem code is LAB_NOT_FOUND', function () {",
+              "    const json = pm.response.json();",
+              "    pm.expect(json.code).to.eql('LAB_NOT_FOUND');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Error - Pending Reviews Remaining (409 Reviews Pending)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tokenTaClassA}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/labs/{{pendingViolationLabId}}/publish",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "labs", "{{pendingViolationLabId}}", "publish"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 409', function () {",
+              "    pm.response.to.have.status(409);",
+              "});",
+              "pm.test('Problem code is REVIEWS_PENDING', function () {",
+              "    const json = pm.response.json();",
+              "    pm.expect(json.code).to.eql('REVIEWS_PENDING');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Error - Invalid UUID v4 Syntax (400 Bad Request)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tokenTaClassA}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/labs/not-a-valid-uuid/publish",
+          "host": ["{{baseUrl}}"],
+          "path": ["v1", "labs", "not-a-valid-uuid", "publish"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "pm.test('Problem code is INVALID_REQUEST', function () {",
+              "    const json = pm.response.json();",
+              "    pm.expect(json.code).to.eql('INVALID_REQUEST');",
+              "    pm.expect(json.errors[0].parameter).to.eql('labId');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ]
+}
