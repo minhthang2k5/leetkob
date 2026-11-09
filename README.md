@@ -1,6 +1,5 @@
 # LeeTKOB — Automated C++ Lab Grading with AI Constraint Verification
 
-[![CI Quality Gate](https://github.com/minhthang2k5/leetkob/actions/workflows/ci.yml/badge.svg)](https://github.com/minhthang2k5/leetkob/actions/workflows/ci.yml)
 [![Node Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)](https://www.typescriptlang.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-5.21-indigo.svg)](https://www.prisma.io/)
@@ -22,15 +21,12 @@ LeeTKOB is an automated grading and semantic constraint review platform for intr
 
 ---
 
-## 2. Repository Architecture
+## 2. Repository Architecture (N2 Package 2)
 
 All application source code, tests, and database management are encapsulated inside the `backend/` directory:
 
 ```text
 leetkob/
-├── .github/
-│   └── workflows/
-│       └── ci.yml               # CI Quality Gate (PostgreSQL service + 4 required checks)
 ├── docs/
 │   ├── contract/
 │   │   ├── publish.md           # API Ground Truth Contract (RFC 9457, idempotency, RBAC)
@@ -38,7 +34,7 @@ leetkob/
 │   └── postman/
 │       ├── LeeTKOB_PA2_Publish.postman_collection.json  # Complete 10-request Postman test suite
 │       └── LeeTKOB_Local.postman_environment.json      # Environment variables & auth tokens
-├── backend/                     # Backend application workspace
+├── backend/                     # Backend application workspace (N2)
 │   ├── compose.yaml             # Docker Compose service for PostgreSQL 16
 │   ├── .env.example             # Safe environment variable template (Zero secrets)
 │   ├── .eslintrc.json           # ESLint TypeScript configuration
@@ -63,9 +59,8 @@ leetkob/
 │   └── tests/                   # Automated test suite
 │       ├── helpers/             # Database resets & mock auth token fixtures
 │       └── contract/            # 14 Contract Tests (Vitest + Supertest)
-├── AGENTS.md                    # Project Rules & Invariants for AI Coding Assistants
-├── AI-LOG.md                    # Auditable AI usage log (Kept, Changed, Rejected)
-├── ROADMAP.md                   # Development roadmap & commit timeline
+├── AI-LOG.md                    # Auditable AI usage log
+├── ROADMAP.md                   # N2 Internal development roadmap
 └── README.md                    # Project root documentation
 ```
 
@@ -163,8 +158,6 @@ A complete Postman test suite is provided under `docs/postman/`:
 
 ---
 
-## 7. API Specification & Deliberate Break
-
+## 7. Handover Reference
 - API Contract Specification: Refer to `docs/contract/publish.md`.
-- Deliberate Break Recipe: Refer to `backend/HANDOVER.md` for instructions on deliberately breaking the contract to demonstrate CI quality gate enforcement.
-- AI Coding Agent Rules: Refer to `AGENTS.md`.
+- Handover Details & Deliberate Break Recipe for N1: Refer to `backend/HANDOVER.md`.
