@@ -40,8 +40,8 @@ docker compose ps
 
 ### 4. Run Prisma Schema Push & Seed Data
 ```bash
-npx prisma db push
-npx prisma db seed
+npm run db:migrate         # applies prisma/migrations to the dev database (leetkob_dev)
+npm run db:test:setup     # applies them to the isolated test database (leetkob_test)
 ```
 
 ### 5. Launch the Development Server
@@ -69,15 +69,15 @@ npm run format:check
 # 3. Static type check with TypeScript compiler
 npm run typecheck
 
-# 4. Execute all 14 contract tests
+# 4. Execute all contract tests (needs `npm run db:test:setup` once; uses leetkob_test only)
 npm test
 ```
 
 ---
 
-## 14 Contract Test Coverage Matrix
+## Contract Test Coverage Matrix
 
-All 14 tests strictly map to `docs/contract/publish-test-cases.md`:
+All tests strictly map to `docs/contract/publish-test-cases.md`:
 
 | Test ID | Scenario | Expected Status | Problem / Replay Header |
 |:---:|---|:---:|---|
@@ -91,15 +91,18 @@ All 14 tests strictly map to `docs/contract/publish-test-cases.md`:
 | **CT-08** | Lab has unreviewed `VIOLATION` or `UNSURE` items | `409` | RFC 9457 `.../reviews-pending` |
 | **CT-09** | Lab has unreviewed 10% sampled `PASS` items | `409` | RFC 9457 `.../reviews-pending` |
 | **CT-10** | `labId` is not a canonical UUID v4 string | `400` | RFC 9457 `.../invalid-request` (`errors` array) |
+| **CT-10b** | `labId` is a UUID v1, not v4 | `400` | RFC 9457 `.../invalid-request` |
 | **CT-11** | Idempotent replay on already `PUBLISHED` lab | `200` | Header `Idempotent-Replayed: true`, timestamp preserved |
 | **CT-12** | Concurrency: Two simultaneous publish requests | `200` | Both return identical timestamp, 1 atomic transition |
 | **CT-13** | Security check precedes idempotency on published lab | `403` | Unauthorized callers cannot probe published labs |
+| **CT-13b** | TA of another class calls an already published lab | `403` | RFC 9457 `.../forbidden`, no `publishedAt` leaked |
 | **CT-14** | Client sends unexpected extra JSON body fields | `200` | Extra body fields ignored safely |
+| **CT-15** | Database failure while publishing | `500` | RFC 9457 `.../internal`, no internals in `detail` |
 
 ---
 
 ## Documentation Links
 - API Contract Specification: [`../docs/contract/publish.md`](../docs/contract/publish.md)
 - Detailed Test Checklist: [`../docs/contract/publish-test-cases.md`](../docs/contract/publish-test-cases.md)
-- Postman Collection: [`../docs/postman/LeeTKOB_PA2_Publish.postman_collection.json`](../docs/postman/LeeTKOB_PA2_Publish.postman_collection.json)
+- Postman Collection: [`./postman/LeeTKOB_PA2_Publish.postman_collection.json`](./postman/LeeTKOB_PA2_Publish.postman_collection.json)
 - Handover Document & Break Recipe: [`./HANDOVER.md`](./HANDOVER.md)

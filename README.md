@@ -28,12 +28,9 @@ All application source code, tests, and database management are encapsulated ins
 ```text
 leetkob/
 ├── docs/
-│   ├── contract/
-│   │   ├── publish.md           # API Ground Truth Contract (RFC 9457, idempotency, RBAC)
-│   │   └── publish-test-cases.md# 14 Detailed Contract Test Specifications (CT-01 -> CT-14)
-│   └── postman/
-│       ├── LeeTKOB_PA2_Publish.postman_collection.json  # Complete 10-request Postman test suite
-│       └── LeeTKOB_Local.postman_environment.json      # Environment variables & auth tokens
+│   └── contract/
+│       ├── publish.md           # API Ground Truth Contract (RFC 9457, idempotency, RBAC)
+│       └── publish-test-cases.md# Detailed Contract Test Specifications (CT-01 -> CT-15)
 ├── backend/                     # Backend application workspace (N2)
 │   ├── compose.yaml             # Docker Compose service for PostgreSQL 16
 │   ├── .env.example             # Safe environment variable template (Zero secrets)
@@ -43,10 +40,12 @@ leetkob/
 │   ├── tsconfig.json            # Strict TypeScript compiler options
 │   ├── vitest.config.ts         # Vitest test runner configuration
 │   ├── README.md                # Dedicated backend documentation
-│   ├── HANDOVER.md              # Milestone handover & deliberate break recipe
+│   ├── postman/                 # Postman collection + local environment
+│   ├── docker/initdb/           # Creates the isolated leetkob_test database
+│   ├── scripts/                 # db-test-setup.js (migrations for the test DB)
 │   ├── prisma/
 │   │   ├── schema.prisma        # Models: User, Class, ClassTA, Lab, SubmissionReview
-│   │   └── seed.ts              # Canonical test fixtures for 14 contract test cases
+│   │   └── seed.ts              # Canonical test fixtures for the contract tests
 │   ├── src/                     # Express application source code
 │   │   ├── app.ts               # In-memory Express instance (imported by Supertest)
 │   │   ├── server.ts            # Standalone HTTP listener
@@ -58,7 +57,7 @@ leetkob/
 │   │   └── services/            # Core business invariants & atomic transactions
 │   └── tests/                   # Automated test suite
 │       ├── helpers/             # Database resets & mock auth token fixtures
-│       └── contract/            # 14 Contract Tests (Vitest + Supertest)
+│       └── contract/            # Contract Tests (Vitest + Supertest)
 ├── AI-LOG.md                    # Auditable AI usage log
 ├── ROADMAP.md                   # N2 Internal development roadmap
 └── README.md                    # Project root documentation
@@ -75,7 +74,7 @@ Per project rules and rubric requirements, each quality gate is triggered via a 
 | Linting | `npm run lint` | Runs `eslint src tests --ext .ts` without hanging. |
 | Formatting | `npm run format:check` | Verifies style compliance with `prettier --check`. |
 | Type Checking | `npm run typecheck` | Validates strict static typing with `tsc --noEmit`. |
-| Contract Testing | `npm test` | Executes all 14 contract tests via `vitest run` (exit code 0/1). |
+| Contract Testing | `npm test` | Executes all contract tests via `vitest run` (exit code 0/1). |
 
 ---
 
@@ -115,8 +114,8 @@ docker compose ps
 
 ### Step 5: Run Prisma Migrations and Seed Database
 ```bash
-npx prisma db push
-npx prisma db seed
+npm run db:migrate        # applies prisma/migrations to the dev database
+npx prisma db seed        # optional: sample data in the dev database
 ```
 
 ### Step 6: Start the Development Server
@@ -132,32 +131,42 @@ curl http://localhost:3000/health
 
 ## 5. Running Contract Tests
 
-Run all 14 contract tests (covering Happy path, Admin role, Student 403, Ownership 403, UUID 400, Reviews Pending 409, Idempotency Replay, Concurrency, and Extensibility):
+Run all contract tests (covering Happy path, Admin role, Student 403, Ownership 403, UUID 400, Reviews Pending 409, Idempotency Replay, Concurrency, and Extensibility):
+
+The tests use their own database, `leetkob_test` (from `TEST_DATABASE_URL`), and never touch the dev database. The helper refuses to reset any database whose name does not end in `_test`. With PostgreSQL running (`docker compose up -d`) and `.env` created, prepare the test database once and run the tests:
 
 ```bash
 cd backend
+npm run db:test:setup   # once: applies migrations to leetkob_test
 npm test
 ```
 
+If your Docker volume was created before `leetkob_test` existed, create it once: `docker compose exec postgres psql -U postgres -c "CREATE DATABASE leetkob_test;"`.
+
 Expected result:
 ```text
-tests/contract/publish.contract.spec.ts (14 tests) 14 passed
-Tests  14 passed (14)
-Duration  ~1.2s
+Test Files  1 passed (1)
+     Tests  17 passed (17)
 ```
 
 ---
 
 ## 6. Postman Collection
 
-A complete Postman test suite is provided under `docs/postman/`:
+A complete Postman test suite is provided under `backend/postman/`:
 1. Open Postman -> Click Import.
-2. Select `docs/postman/LeeTKOB_PA2_Publish.postman_collection.json`.
-3. Select `docs/postman/LeeTKOB_Local.postman_environment.json`.
+2. Select `backend/postman/LeeTKOB_PA2_Publish.postman_collection.json`.
+3. Select `backend/postman/LeeTKOB_Local.postman_environment.json`.
 4. Run the collection. All 10 requests include automated test assertions verifying status codes, RFC 9457 problem schemas, and the `Idempotent-Replayed: true` header.
 
 ---
 
-## 7. Handover Reference
+## 7. AI and model usage
+
+PA#2 calls no model: the endpoint has no LLM step and the tests never call a real model. No model API key exists in this repository. When a provider is chosen for PA#3, its key will be created with a spending cap, kept out of git (`.env` is ignored) and listed without a value in `.env.example`; this section will then name the model and the cost of one lab.
+
+---
+
+## 8. Handover Reference
 - API Contract Specification: Refer to `docs/contract/publish.md`.
 - Handover Details & Deliberate Break Recipe for N1: Refer to `backend/HANDOVER.md`.
