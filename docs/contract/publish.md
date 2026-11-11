@@ -29,7 +29,7 @@ change it in a separate commit that says why — never quietly.
 
 ## 2. Errors
 
-Every `/v1` response with a 4xx or 5xx status is a **Problem Details** object adhering to **RFC 9457**:
+Every `/v1` response with a 4xx or 5xx status — including a request for a `/v1` path or method that does not exist — is a **Problem Details** object adhering to **RFC 9457**:
 
 ```http
 HTTP/1.1 409 Conflict
@@ -61,11 +61,12 @@ Content-Type: application/problem+json; charset=utf-8
 
 | Slug | HTTP Status | Code | Title | Trigger Condition |
 |---|---|---|---|---|
-| `invalid-request` | 400 | `INVALID_REQUEST` | Invalid request | `labId` is not a valid UUID format, or request structure is malformed. |
+| `invalid-request` | 400 | `INVALID_REQUEST` | Invalid request | `labId` is not a valid UUID v4. |
 | `unauthorized` | 401 | `UNAUTHORIZED` | Unauthorized | Missing `Authorization` header, invalid token format, or expired/unrecognized token. |
 | `forbidden` | 403 | `FORBIDDEN` | Forbidden | Caller is authenticated but lacks permission (Student role, or TA not assigned to the class containing this lab). |
 | `not-found` | 404 | `LAB_NOT_FOUND` | Lab not found | `labId` is a valid UUID but no corresponding lab exists in the system. |
 | `reviews-pending` | 409 | `REVIEWS_PENDING` | Required reviews are pending | Lab still has incomplete required constraint reviews (`violation`, `unsure`, or sampled `pass`). |
+| `route-not-found` | 404 | `ROUTE_NOT_FOUND` | Route not found | The request is under `/v1` but no endpoint exists for that path and method (for example `GET /v1/labs/{labId}/publish` or `POST /v1/nope`). Checked without authentication. Not the same as `not-found`, which is a valid endpoint naming a lab that does not exist. |
 | `internal` | 500 | `INTERNAL_ERROR` | Internal server error | Any unhandled server exception. `detail` is a generic, static sentence. |
 
 ---
@@ -123,7 +124,7 @@ Publishes marks for the designated lab, closing the review phase and making mark
   - `labId` (required, string): Canonical UUID v4.
 - **Headers**:
   - `Authorization: Bearer <token>` (required)
-- **Body**: None required. Client must not pass operational parameters. If a body is sent, the server ignores it.
+- **Body**: None. Client must not pass operational parameters. The server does not read the request body: any body — JSON with unknown fields, malformed JSON, or another content type — is ignored and never causes an error or changes the result.
 
 #### Processing & Verification Order
 
@@ -202,6 +203,7 @@ Errors (all `Content-Type: application/problem+json; charset=utf-8`):
 | Valid UUID v4, no such lab | 404 | `not-found` | `LAB_NOT_FOUND` |
 | TA not assigned to the lab's class | 403 | `forbidden` | `FORBIDDEN` |
 | A required review is still pending | 409 | `reviews-pending` | `REVIEWS_PENDING` |
+| Unknown `/v1` path or method (e.g. `GET` on the publish path) | 404 | `route-not-found` | `ROUTE_NOT_FOUND` |
 | Unhandled server failure | 500 | `internal` | `INTERNAL_ERROR` |
 
 #### Existence disclosure
@@ -228,6 +230,7 @@ Students are refused (`403`) before the lab is looked up, so a student cannot le
 |---|---|---|
 | 2026-11-09 | v1 | First version: publish endpoint, RFC 9457 errors, state-based idempotency. |
 | 2026-11-11 | v1 (clarification) | Concurrent requests: exactly one performs the transition, the others get `Idempotent-Replayed: true` (was "either"). Added paging note, examples and existence-disclosure note. `labId` must be UUID v4, as section 1 already said. No change to paths, fields or statuses. |
+| 2026-11-11 | v1 (additive) | New problem type `route-not-found` (404) for unknown `/v1` paths and methods, as section 2 already required of every `/v1` error. The request body is explicitly not read, so a malformed body is ignored instead of failing. No existing path, field or status changes. |
 
 ---
 
