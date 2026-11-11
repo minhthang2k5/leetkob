@@ -228,6 +228,19 @@ describe('POST /v1/labs/:labId/publish Contract Tests', () => {
   });
 
   // --------------------------------------------------------------------------
+  // CT-10b: A well-formed UUID of another version is not a UUID v4 (contract section 1)
+  // --------------------------------------------------------------------------
+  it('CT-10b: labId is a UUID v1, not v4 -> 400 Bad Request', async () => {
+    const res = await request(app)
+      .post('/v1/labs/550e8400-e29b-11d4-a716-446655440000/publish')
+      .set('Authorization', `Bearer ${TEST_TOKENS.TA_CLASS_A}`);
+
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(res.body.code).toBe('INVALID_REQUEST');
+  });
+
+  // --------------------------------------------------------------------------
   // CT-11: Idempotency — Re-calling Publish on Already Published Lab
   // --------------------------------------------------------------------------
   it('CT-11: Re-calling publish on already PUBLISHED lab -> 200 with Idempotent-Replayed: true', async () => {
