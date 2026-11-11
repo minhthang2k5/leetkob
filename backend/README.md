@@ -23,11 +23,10 @@ npm install
 ```
 
 ### 2. Configure Environment Variables
-Copy `.env.example` to `.env`:
+`.env.example` lists every variable and holds no values. Create your local `.env` (it fills in the local development defaults and never overwrites an existing `.env`):
 ```bash
-cp .env.example .env
+npm run init:env
 ```
-*(On Windows PowerShell: `Copy-Item .env.example .env`)*
 
 ### 3. Start PostgreSQL using Docker Compose
 ```bash

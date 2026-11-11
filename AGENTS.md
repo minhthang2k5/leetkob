@@ -21,7 +21,7 @@ npm run typecheck
 npm test                  # needs: docker compose up -d, then once: npm run db:test:setup
 ```
 
-Setup: `npm ci`, `cp .env.example .env`, `docker compose up -d`, `npx prisma generate`.
+Setup: `npm ci`, `npm run init:env`, `docker compose up -d`, `npx prisma generate`.
 
 ## 3. Conventions
 
