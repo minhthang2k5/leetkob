@@ -147,7 +147,8 @@ describe('POST /v1/labs/:labId/publish Contract Tests', () => {
   // CT-07: Valid UUID but Lab Does Not Exist
   // --------------------------------------------------------------------------
   it('CT-07: Valid UUID v4 but lab does not exist -> 404 Lab Not Found', async () => {
-    const nonExistentLabId = 'a0000000-0000-0000-0000-000000000000';
+    // Must be a canonical UUID v4 (contract section 1): version nibble 4, variant nibble 8.
+    const nonExistentLabId = 'a0000000-0000-4000-8000-000000000000';
 
     const res = await request(app)
       .post(`/v1/labs/${nonExistentLabId}/publish`)
