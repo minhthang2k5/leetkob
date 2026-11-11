@@ -38,4 +38,3 @@ export async function authMiddleware(
     sendUnauthorized(res, req.originalUrl, 'Authentication verification failed.');
   }
 }
-

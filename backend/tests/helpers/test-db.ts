@@ -8,4 +8,3 @@ export async function resetTestDatabase(): Promise<void> {
 export async function disconnectTestDatabase(): Promise<void> {
   await prisma.$disconnect();
 }
-

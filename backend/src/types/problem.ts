@@ -52,4 +52,3 @@ export const PROBLEM_TYPES = {
     title: 'Internal server error'
   }
 } as const;
-

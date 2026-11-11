@@ -6,4 +6,3 @@ const router = Router();
 router.use('/', labRoutes);
 
 export default router;
-

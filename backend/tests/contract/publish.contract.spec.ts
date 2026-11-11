@@ -222,9 +222,7 @@ describe('POST /v1/labs/:labId/publish Contract Tests', () => {
       title: 'Invalid request',
       status: 400,
       code: 'INVALID_REQUEST',
-      errors: expect.arrayContaining([
-        expect.objectContaining({ parameter: 'labId' })
-      ])
+      errors: expect.arrayContaining([expect.objectContaining({ parameter: 'labId' })])
     });
   });
 
@@ -306,4 +304,3 @@ describe('POST /v1/labs/:labId/publish Contract Tests', () => {
     expect(res.body.status).toBe('PUBLISHED');
   });
 });
-

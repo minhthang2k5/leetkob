@@ -16,4 +16,3 @@ export function errorHandlerMiddleware(
     'An unexpected server error occurred while processing the request.'
   );
 }
-

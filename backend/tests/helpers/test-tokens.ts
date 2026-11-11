@@ -5,4 +5,3 @@ export const TEST_TOKENS = {
   STUDENT: 'token-student',
   INVALID: 'invalid-token-12345'
 };
-

@@ -12,10 +12,7 @@ export interface PublishResult {
 }
 
 export type PublishErrorType =
-  | 'FORBIDDEN_ROLE'
-  | 'LAB_NOT_FOUND'
-  | 'FORBIDDEN_CLASS'
-  | 'REVIEWS_PENDING';
+  'FORBIDDEN_ROLE' | 'LAB_NOT_FOUND' | 'FORBIDDEN_CLASS' | 'REVIEWS_PENDING';
 
 export class PublishError extends Error {
   constructor(
@@ -132,4 +129,3 @@ export async function publishLab(
     isReplay: false
   };
 }
-
