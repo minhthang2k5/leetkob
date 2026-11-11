@@ -92,13 +92,14 @@ export async function publishLab(
     }
   });
 
-  if (pendingCount > 0) {
-    throw new PublishError(
-      'REVIEWS_PENDING',
-      `Lab ${labId} has ${pendingCount} required reviews pending.`,
-      { pendingCount }
-    );
-  }
+  // DELIBERATE CONTRACT BREAK (PA2 evidence, never merge): the pending-review guard is off.
+  // if (pendingCount > 0) {
+  //   throw new PublishError(
+  //     'REVIEWS_PENDING',
+  //     `Lab ${labId} has ${pendingCount} required reviews pending.`,
+  //     { pendingCount }
+  //   );
+  // }
 
   // Step 8: Atomic Publication
   // The transition is a single conditional UPDATE (compare-and-set on status = DRAFT).
