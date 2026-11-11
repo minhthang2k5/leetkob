@@ -146,7 +146,7 @@ If your Docker volume was created before `leetkob_test` existed, create it once:
 Expected result:
 ```text
 Test Files  1 passed (1)
-     Tests  17 passed (17)
+     Tests  20 passed (20)
 ```
 
 ---

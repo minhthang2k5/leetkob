@@ -29,6 +29,8 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
 | **CT-13b** | §4.1 Idempotency: TA of another class calls an already published lab | TA (Class B) | Already `PUBLISHED` (Class A) | `403` | `.../forbidden` | Lab untouched; no `publishedAt` in the body |
 | **CT-14** | §1 Extensibility: Client sends non-empty/unexpected JSON body | TA (Assigned) | Ready (`DRAFT`, 0 pending) | `200` | None | Body ignored; Lab published successfully |
 | **CT-15** | §2.2 `internal`: unhandled server failure | TA (Assigned) | Ready (`DRAFT`, 0 pending); the database fails mid-request | `500` | `.../internal` | No change; `detail` leaks no internals |
+| **CT-16** | §4.1 Request: the body is never read; malformed JSON body | TA (Assigned) | Ready (`DRAFT`, 0 pending) | `200` | None | Body ignored; Lab published |
+| **CT-17** | §2: unknown `/v1` path, or wrong method on the publish path | None needed | N/A | `404` | `.../route-not-found` | No change |
 
 ---
 
@@ -317,3 +319,18 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
   - Body: `type` `"https://leetkob.example/problems/internal"`, `title` `"Internal server error"`, `status` `500`, `code` `"INTERNAL_ERROR"`, `instance` is the request path.
   - The body contains no host name, table name or stack trace from the underlying error.
 - **Database Post-condition**: Lab remains `DRAFT`.
+
+---
+
+### CT-16: Malformed Body Is Ignored
+- **Contract Reference**: §4.1 Request (Body)
+- **Preconditions**: Lab `lab_1` is `DRAFT` and ready to publish.
+- **Request**: `POST /v1/labs/{lab_1.id}/publish`, token of the assigned TA, `Content-Type: application/json`, body `{this is not json`.
+- **Expected Response**: `200 OK` with the `LabPublishReceipt`; never a `4xx` or `5xx`, because the server does not read the body.
+
+---
+
+### CT-17: Unknown `/v1` Route
+- **Contract Reference**: §2 (every `/v1` error is problem details) & §2.2 `route-not-found`
+- **Request**: `POST /v1/nope`, and `GET /v1/labs/{lab_1.id}/publish`; no `Authorization` header is needed.
+- **Expected Response**: `404 Not Found`, `Content-Type: application/problem+json; charset=utf-8`; body `type` `"https://leetkob.example/problems/route-not-found"`, `title` `"Route not found"`, `status` `404`, `code` `"ROUTE_NOT_FOUND"`, `instance` is the request path.

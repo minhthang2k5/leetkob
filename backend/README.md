@@ -98,6 +98,8 @@ All tests strictly map to `docs/contract/publish-test-cases.md`:
 | **CT-13b** | TA of another class calls an already published lab | `403` | RFC 9457 `.../forbidden`, no `publishedAt` leaked |
 | **CT-14** | Client sends unexpected extra JSON body fields | `200` | Extra body fields ignored safely |
 | **CT-15** | Database failure while publishing | `500` | RFC 9457 `.../internal`, no internals in `detail` |
+| **CT-16** | Malformed JSON body | `200` | Body is never read, so it is ignored |
+| **CT-17** | Unknown `/v1` path or wrong method | `404` | RFC 9457 `.../route-not-found` |
 
 ---
 
