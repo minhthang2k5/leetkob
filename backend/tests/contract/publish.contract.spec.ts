@@ -1,4 +1,13 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterAll,
+  afterEach,
+  vi
+} from 'vitest';
 import request from 'supertest';
 import app from '../../src/app';
 import { prisma } from '../../src/utils/prisma';
@@ -307,6 +316,60 @@ describe('POST /v1/labs/:labId/publish Contract Tests', () => {
     expect(res.status).toBe(403);
     expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
     expect(res.body.code).toBe('FORBIDDEN');
+  });
+
+  // --------------------------------------------------------------------------
+  // CT-13b: Ownership is enforced on replay too (contract section 4.1, Idempotency)
+  // --------------------------------------------------------------------------
+  it('CT-13b: TA of another class calling an already published lab -> 403 Forbidden', async () => {
+    const labId = SEED_DATA.labs.alreadyPublished.id; // Belongs to Class A
+
+    const res = await request(app)
+      .post(`/v1/labs/${labId}/publish`)
+      .set('Authorization', `Bearer ${TEST_TOKENS.TA_CLASS_B}`);
+
+    expect(res.status).toBe(403);
+    expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(res.headers['idempotent-replayed']).toBeUndefined();
+    expect(res.body.code).toBe('FORBIDDEN');
+    // The stored receipt must not leak to a caller who may not publish this lab.
+    expect(res.body.publishedAt).toBeUndefined();
+  });
+
+  // --------------------------------------------------------------------------
+  // CT-15: Unhandled server error -> 500 problem details without internals
+  // --------------------------------------------------------------------------
+  describe('CT-15: internal error', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('returns 500 INTERNAL_ERROR and never leaks the underlying error', async () => {
+      const labId = SEED_DATA.labs.ready.id;
+      // The ready lab passes every check, so the failure hits the publishing transaction.
+      vi.spyOn(prisma, '$transaction').mockRejectedValueOnce(
+        new Error('connection to server at "10.0.0.5" failed: relation "labs" error')
+      );
+
+      const res = await request(app)
+        .post(`/v1/labs/${labId}/publish`)
+        .set('Authorization', `Bearer ${TEST_TOKENS.TA_CLASS_A}`);
+
+      expect(res.status).toBe(500);
+      expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+      expect(res.body).toMatchObject({
+        type: 'https://leetkob.example/problems/internal',
+        title: 'Internal server error',
+        status: 500,
+        code: 'INTERNAL_ERROR',
+        instance: `/v1/labs/${labId}/publish`
+      });
+      expect(JSON.stringify(res.body)).not.toMatch(/10\.0\.0\.5|relation|connection/);
+
+      // The failure happened before any write: the lab stays unpublished.
+      const labInDb = await prisma.lab.findUnique({ where: { id: labId } });
+      expect(labInDb?.status).toBe('DRAFT');
+    });
   });
 
   // --------------------------------------------------------------------------
