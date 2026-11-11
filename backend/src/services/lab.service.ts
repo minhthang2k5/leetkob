@@ -101,23 +101,21 @@ export async function publishLab(
   }
 
   // Step 8: Atomic Publication
-  const publishedLab = await prisma.$transaction(async (tx) => {
-    // Re-check inside transaction for concurrency safety (CT-12)
-    const current = await tx.lab.findUniqueOrThrow({
-      where: { id: labId }
-    });
-
-    if (current.status === LabStatus.PUBLISHED && current.publishedAt) {
-      return current;
-    }
-
-    return tx.lab.update({
-      where: { id: labId },
+  // The transition is a single conditional UPDATE (compare-and-set on status = DRAFT).
+  // Under concurrency PostgreSQL makes the second writer wait for the row lock, then
+  // re-evaluates the WHERE clause against the committed row: it matches 0 rows, so
+  // publishedAt is never overwritten and exactly one request performs the transition.
+  const { publishedLab, transitioned } = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.lab.updateMany({
+      where: { id: labId, status: LabStatus.DRAFT },
       data: {
         status: LabStatus.PUBLISHED,
         publishedAt: new Date()
       }
     });
+
+    const current = await tx.lab.findUniqueOrThrow({ where: { id: labId } });
+    return { publishedLab: current, transitioned: count === 1 };
   });
 
   return {
@@ -126,6 +124,7 @@ export async function publishLab(
       status: 'PUBLISHED',
       publishedAt: publishedLab.publishedAt!.toISOString()
     },
-    isReplay: false
+    // The loser of a concurrent race gets the stored receipt, i.e. a replay.
+    isReplay: !transitioned
   };
 }

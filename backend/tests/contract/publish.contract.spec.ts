@@ -283,8 +283,15 @@ describe('POST /v1/labs/:labId/publish Contract Tests', () => {
     expect(res2.status).toBe(200);
     expect(res1.body.publishedAt).toBe(res2.body.publishedAt);
 
+    // Exactly one request performed the transition; the other got the stored receipt.
+    const replays = [res1, res2].filter(
+      (r) => r.headers['idempotent-replayed'] === 'true'
+    );
+    expect(replays).toHaveLength(1);
+
     const labInDb = await prisma.lab.findUnique({ where: { id: labId } });
     expect(labInDb?.status).toBe('PUBLISHED');
+    expect(labInDb?.publishedAt?.toISOString()).toBe(res1.body.publishedAt);
   });
 
   // --------------------------------------------------------------------------
