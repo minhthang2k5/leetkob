@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "lint": "eslint src tests --ext .ts",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
@@ -15,6 +15,8 @@
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "db:migrate": "prisma migrate deploy",
+    "db:test:setup": "node scripts/db-test-setup.js",
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "prisma": {
