@@ -72,3 +72,10 @@ Kept: scores tied to a file, commit, PR or run; the "what we did not manage" sec
 Changed: the first draft claimed 90; criteria 1, 3, 4, 5 and 6 were raised to full marks (total 96).
 Rejected: scoring 100 (an old template in the git history claimed 100 while branch protection did not exist yet); full marks for criterion 2 (`.env.example` has local default values and there is no model key or spending cap).
 Note: commits made with the assistant up to PR #2 carry a `Co-Authored-By: Claude` trailer; from the evidence PR onward the team lead asked for it to be left out. AI use is recorded here.
+
+## 2026-11-11 — Team lead (N1): value-free `.env.example`
+Tool: Claude Code (Claude Sonnet 5.5).
+Asked for: raise criterion 2 by making `.env.example` list every variable without values, without breaking a fresh clone.
+Kept: the four variable names and the dev/test database split.
+Changed: `.env.example` now holds names only, and a new `npm run init:env` fills the local development defaults into `.env` and never overwrites an existing one; checked on a fresh clone with all four checks green (20/20 tests).
+Rejected: claiming a spending cap for a model key that does not exist (the assistant refused to word it that way); scoring criterion 2 at 10 (the self-score is 8).
