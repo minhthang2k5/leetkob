@@ -387,4 +387,49 @@ describe('POST /v1/labs/:labId/publish Contract Tests', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('PUBLISHED');
   });
+
+  // --------------------------------------------------------------------------
+  // CT-16: Malformed Body is Ignored, Never a Server Error (contract 4.1 Request)
+  // --------------------------------------------------------------------------
+  it('CT-16: Malformed JSON body is ignored -> 200 OK, not a 5xx', async () => {
+    const labId = SEED_DATA.labs.ready.id;
+
+    const res = await request(app)
+      .post(`/v1/labs/${labId}/publish`)
+      .set('Authorization', `Bearer ${TEST_TOKENS.TA_CLASS_A}`)
+      .set('Content-Type', 'application/json')
+      .send('{this is not json');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      labId,
+      status: 'PUBLISHED',
+      publishedAt: expect.any(String)
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // CT-17: Unknown /v1 Route -> 404 route-not-found Problem Details (contract 2)
+  // --------------------------------------------------------------------------
+  describe('CT-17: unknown /v1 route', () => {
+    const labId = SEED_DATA.labs.ready.id;
+    const cases: Array<[string, 'get' | 'post', string]> = [
+      ['unknown path', 'post', '/v1/nope'],
+      ['wrong method on the publish path', 'get', `/v1/labs/${labId}/publish`]
+    ];
+
+    it.each(cases)('%s -> 404 problem+json', async (_name, method, path) => {
+      const res = await request(app)[method](path);
+
+      expect(res.status).toBe(404);
+      expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+      expect(res.body).toMatchObject({
+        type: 'https://leetkob.example/problems/route-not-found',
+        title: 'Route not found',
+        status: 404,
+        code: 'ROUTE_NOT_FOUND',
+        instance: path
+      });
+    });
+  });
 });
