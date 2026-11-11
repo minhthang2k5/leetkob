@@ -33,7 +33,7 @@ leetkob/
 │       └── publish-test-cases.md# Detailed Contract Test Specifications (CT-01 -> CT-15)
 ├── backend/                     # Backend application workspace (N2)
 │   ├── compose.yaml             # Docker Compose service for PostgreSQL 16
-│   ├── .env.example             # Safe environment variable template (Zero secrets)
+│   ├── .env.example             # Variable names only, no values (npm run init:env fills .env)
 │   ├── .eslintrc.json           # ESLint TypeScript configuration
 │   ├── .prettierrc              # Prettier formatting configuration
 │   ├── package.json             # Scripts & dependencies
@@ -97,11 +97,10 @@ npm install
 ```
 
 ### Step 3: Setup environment variables
-Copy `.env.example` to `.env`:
+`.env.example` lists every variable and holds no values. Create your local `.env` (it fills in the local development defaults and never overwrites an existing `.env`):
 ```bash
-cp .env.example .env
+npm run init:env
 ```
-*(On Windows PowerShell: `Copy-Item .env.example .env`)*
 
 ### Step 4: Start PostgreSQL with Docker Compose
 ```bash

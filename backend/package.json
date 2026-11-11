@@ -10,6 +10,7 @@
     "lint": "eslint src tests --ext .ts",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "init:env": "node scripts/init-env.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
