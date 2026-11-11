@@ -22,17 +22,20 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
 | **CT-08** | §4.1 Lab has pending required `violation` or `unsure` reviews | TA (Assigned) | Incomplete (1 `violation` pending) | `409` | `.../reviews-pending` | No change (remains `DRAFT`) |
 | **CT-09** | §4.1 Lab has pending required 10% sampled `pass` reviews | TA (Assigned) | Incomplete (1 sampled `pass` pending) | `409` | `.../reviews-pending` | No change (remains `DRAFT`) |
 | **CT-10** | §4.1 `labId` parameter is not a valid canonical UUID v4 string | TA (Assigned) | N/A (`"lab-123"`) | `400` | `.../invalid-request` | No change |
+| **CT-10b** | §1 / §4.1 step 2: `labId` is a well-formed UUID but not version 4 | TA (Assigned) | N/A (`550e8400-e29b-11d4-a716-446655440000`) | `400` | `.../invalid-request` | No change |
 | **CT-11** | §4.1 Idempotency: Re-calling publish on already `PUBLISHED` lab | TA (Assigned) | Already `PUBLISHED` | `200` | `Idempotent-Replayed: true` | Original `publishedAt` preserved |
 | **CT-12** | §4.1 Concurrency: Two simultaneous publish requests on the same ready lab | TA (Assigned) | Ready (`DRAFT`, 0 pending) | `200` / `200` | Consistent state | Exactly 1 transition, identical timestamp |
 | **CT-13** | §4.1 Ownership check precedes Idempotency: Student/unauthorized TA calls already published lab | Student / TA Class B | Already `PUBLISHED` | `403` | `.../forbidden` | Lab remains untouched |
+| **CT-13b** | §4.1 Idempotency: TA of another class calls an already published lab | TA (Class B) | Already `PUBLISHED` (Class A) | `403` | `.../forbidden` | Lab untouched; no `publishedAt` in the body |
 | **CT-14** | §1 Extensibility: Client sends non-empty/unexpected JSON body | TA (Assigned) | Ready (`DRAFT`, 0 pending) | `200` | None | Body ignored; Lab published successfully |
+| **CT-15** | §2.2 `internal`: unhandled server failure | TA (Assigned) | Ready (`DRAFT`, 0 pending); the database fails mid-request | `500` | `.../internal` | No change; `detail` leaks no internals |
 
 ---
 
 ## 2. Detailed Test Specifications
 
 ### CT-01: Happy Path — TA Publishes Completed Lab
-- **Contract Reference**: §4.1 Processing step 7
+- **Contract Reference**: §4.1 Processing step 8 (Atomic Publication)
 - **Preconditions**:
   - Class `CLASS_A` exists with assigned TA `ta_user_1`.
   - Lab `lab_1` belongs to `CLASS_A` with status `DRAFT`, `publishedAt = null`.
@@ -59,7 +62,7 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
 ---
 
 ### CT-02: Admin Publishes Completed Lab
-- **Contract Reference**: §4.1 Who may call it & Processing step 7
+- **Contract Reference**: §4.1 Who may call it (Admin) & Processing steps 5 and 8
 - **Preconditions**:
   - Admin user `admin_user` exists (role `ADMIN`).
   - Lab `lab_2` belongs to `CLASS_A` (admin is not explicitly a class TA) with status `DRAFT`.
@@ -108,7 +111,7 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
 ---
 
 ### CT-05: Student Role Calling Publish
-- **Contract Reference**: §4.1 Who may call it & Processing step 4
+- **Contract Reference**: §4.1 Who may call it & Processing step 3
 - **Preconditions**:
   - Student user `student_1` enrolled in `CLASS_A`.
   - Lab `lab_1` belongs to `CLASS_A`.
@@ -129,7 +132,7 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
 ---
 
 ### CT-06: Ownership Rule — TA of Class B Calling Lab of Class A
-- **Contract Reference**: §4.1 Who may call it & Processing step 4
+- **Contract Reference**: §4.1 Who may call it & Processing step 5
 - **Preconditions**:
   - `CLASS_A` has TA `ta_user_1` and Lab `lab_1`.
   - `CLASS_B` has TA `ta_user_2`.
@@ -147,10 +150,10 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
 ---
 
 ### CT-07: Valid UUID but Lab Does Not Exist
-- **Contract Reference**: §4.1 Processing step 3
-- **Preconditions**: No lab with UUID `a0000000-0000-0000-0000-000000000000` exists.
+- **Contract Reference**: §4.1 Processing step 4
+- **Preconditions**: No lab with UUID `a0000000-0000-4000-8000-000000000000` exists.
 - **Request**:
-  - `POST /v1/labs/a0000000-0000-0000-0000-000000000000/publish`
+  - `POST /v1/labs/a0000000-0000-4000-8000-000000000000/publish`
   - Header: `Authorization: Bearer <token_for_ta_user_1>`
 - **Expected Response**:
   - HTTP Status: `404 Not Found`
@@ -160,12 +163,12 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
     - `title`: `"Lab not found"`
     - `status`: `404`
     - `code`: `"LAB_NOT_FOUND"`
-    - `instance`: `"/v1/labs/a0000000-0000-0000-0000-000000000000/publish"`
+    - `instance`: `"/v1/labs/a0000000-0000-4000-8000-000000000000/publish"`
 
 ---
 
 ### CT-08: Required Review Pending — Violation or Unsure Verdicts
-- **Contract Reference**: §4.1 Processing step 6
+- **Contract Reference**: §4.1 Processing step 7
 - **Preconditions**:
   - Lab `lab_pending_v` has at least 1 constraint review with verdict `violation` or `unsure` that is unreviewed / unresolved.
 - **Request**:
@@ -185,7 +188,7 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
 ---
 
 ### CT-09: Required Review Pending — 10% Sampled Pass Verdict
-- **Contract Reference**: §4.1 Processing step 6 & §3.2
+- **Contract Reference**: §4.1 Processing step 7 & §3.2
 - **Preconditions**:
   - Lab `lab_pending_pass` has all `violation` and `unsure` reviews resolved, but has 1 submission with a sampled `pass` verdict marked for TA human gate check that is still pending.
 - **Request**:
@@ -218,8 +221,17 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
 
 ---
 
+### CT-10b: labId Is a Well-Formed UUID But Not Version 4
+- **Contract Reference**: §1 Conventions & §4.1 Processing step 2
+- **Request**:
+  - `POST /v1/labs/550e8400-e29b-11d4-a716-446655440000/publish` (version nibble `1`)
+  - Header: `Authorization: Bearer <token_for_ta_user_1>`
+- **Expected Response**: `400 Bad Request`, `application/problem+json`, `code`: `"INVALID_REQUEST"`.
+
+---
+
 ### CT-11: Idempotency — Re-calling Publish on Already Published Lab
-- **Contract Reference**: §4.1 Idempotency check (Step 5)
+- **Contract Reference**: §4.1 Idempotency check (Step 6)
 - **Preconditions**:
   - Lab `lab_pub` was already published earlier at `2026-11-08T06:00:00.000Z`.
 - **Request**:
@@ -244,7 +256,7 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
 ---
 
 ### CT-12: Concurrent Publish Requests
-- **Contract Reference**: §4.1 Concurrency & Race conditions
+- **Contract Reference**: §4.1 Idempotency & Concurrency
 - **Preconditions**:
   - Lab `lab_concurrent` is in `DRAFT` status and ready to publish.
 - **Execution**:
@@ -252,8 +264,8 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
 - **Expected Response**:
   - Both requests return `200 OK`.
   - Both responses report the **identical `publishedAt` timestamp**.
-  - One response may have `Idempotent-Replayed: true` if serialized, but both reflect consistent final state.
-- **Database Post-condition**: Exactly one state transition occurred.
+  - **Exactly one** response carries `Idempotent-Replayed: true` (the request that did not perform the transition); the other does not.
+- **Database Post-condition**: Exactly one state transition occurred; the stored `publishedAt` equals the one in both responses.
 
 ---
 
@@ -272,6 +284,14 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
 
 ---
 
+### CT-13b: Another Class's TA Cannot Replay a Published Lab
+- **Contract Reference**: §4.1 Idempotency & Concurrency (Ownership enforcement on replay)
+- **Preconditions**: Lab `lab_pub` (Class A) is already `PUBLISHED`.
+- **Request**: `POST /v1/labs/{lab_pub.id}/publish` with the token of a TA assigned only to Class B.
+- **Expected Response**: `403 Forbidden`, `application/problem+json`, `code`: `"FORBIDDEN"`; no `Idempotent-Replayed` header and no `publishedAt` in the body.
+
+---
+
 ### CT-14: Extensibility — Non-empty Unexpected Request Body is Safely Ignored
 - **Contract Reference**: §1 Conventions (Extensibility) & §4.1 Request Body
 - **Preconditions**:
@@ -285,3 +305,15 @@ Each test must verify **HTTP status code**, **response headers**, **response bod
   - HTTP Status: `200 OK`
   - Body `status` is strictly `"PUBLISHED"`, and unexpected body fields have zero effect.
 - **Database Post-condition**: Lab is published normally without corrupted fields.
+
+---
+
+### CT-15: Unhandled Server Error
+- **Contract Reference**: §2.2 (`internal` → 500) & §2.1 (`detail` rules)
+- **Preconditions**: Lab `lab_1` is `DRAFT` and ready to publish; the database call that publishes it fails with an error whose message contains an internal host name and a table name.
+- **Request**: `POST /v1/labs/{lab_1.id}/publish` with the token of the assigned TA.
+- **Expected Response**:
+  - HTTP Status: `500 Internal Server Error`, `Content-Type: application/problem+json; charset=utf-8`.
+  - Body: `type` `"https://leetkob.example/problems/internal"`, `title` `"Internal server error"`, `status` `500`, `code` `"INTERNAL_ERROR"`, `instance` is the request path.
+  - The body contains no host name, table name or stack trace from the underlying error.
+- **Database Post-condition**: Lab remains `DRAFT`.

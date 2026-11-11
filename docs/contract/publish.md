@@ -169,8 +169,44 @@ The server executes the following checks **in strict order** and halts at the fi
 #### Idempotency & Concurrency
 
 - **Calling Repeatedly**: Calling `POST /v1/labs/{labId}/publish` on an already published lab is safe and idempotent. The server returns the identical status and original `publishedAt` timestamp.
-- **Ownership enforcement on replay**: Even if a lab is already published, calls by unauthorized users (e.g. a student or a TA from another class) **must still be refused with 403 Forbidden** (Check 4 precedes Check 5).
-- **Concurrent Requests**: If two concurrent `POST /v1/labs/{labId}/publish` requests arrive simultaneously, database-level locking/transaction isolation must ensure that only one executes the initial transition. The other either serializes and receives the replayed response, or both safely return the consistent `PUBLISHED` state with the same `publishedAt`.
+- **Ownership enforcement on replay**: Even if a lab is already published, calls by unauthorized users (e.g. a student or a TA from another class) **must still be refused with 403 Forbidden** (Check 5 precedes Check 6).
+- **Concurrent Requests**: If two or more `POST /v1/labs/{labId}/publish` requests for the same ready lab arrive at the same time, the server performs the `DRAFT` → `PUBLISHED` transition exactly once (compare-and-set on `status`). The request that performed it returns `200 OK` without `Idempotent-Replayed`. Every other concurrent request returns `200 OK` with the same stored `publishedAt` and `Idempotent-Replayed: true`. `publishedAt` is never overwritten.
+
+#### Paging
+
+Not applicable. This endpoint acts on one lab and returns one object; it is not a list.
+
+#### Examples
+
+Success (first call):
+
+```http
+POST /v1/labs/550e8400-e29b-41d4-a716-446655440000/publish HTTP/1.1
+Authorization: Bearer <token>
+
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+
+{ "labId": "550e8400-e29b-41d4-a716-446655440000", "status": "PUBLISHED", "publishedAt": "2026-11-09T08:00:00.000Z" }
+```
+
+Repeat call (same lab, same or another authorized caller): `200 OK`, header `Idempotent-Replayed: true`, identical body.
+
+Errors (all `Content-Type: application/problem+json; charset=utf-8`):
+
+| Situation | Status | `type` slug | `code` |
+|---|---|---|---|
+| No `Authorization` header, or unknown/expired token | 401 | `unauthorized` | `UNAUTHORIZED` |
+| `labId` is not a UUID v4 (e.g. `not-a-valid-uuid`) | 400 | `invalid-request` | `INVALID_REQUEST` |
+| Caller is a student | 403 | `forbidden` | `FORBIDDEN` |
+| Valid UUID v4, no such lab | 404 | `not-found` | `LAB_NOT_FOUND` |
+| TA not assigned to the lab's class | 403 | `forbidden` | `FORBIDDEN` |
+| A required review is still pending | 409 | `reviews-pending` | `REVIEWS_PENDING` |
+| Unhandled server failure | 500 | `internal` | `INTERNAL_ERROR` |
+
+#### Existence disclosure
+
+Students are refused (`403`) before the lab is looked up, so a student cannot learn which `labId`s exist. A TA or admin who passes the role check does receive `404` for an unknown lab and `403` for a lab of another class; this is accepted because TAs are staff and the lab list is not secret from them.
 
 ---
 
@@ -185,3 +221,20 @@ The server executes the following checks **in strict order** and halts at the fi
   - Changing field types or date formats.
   - Changing error status codes or removing problem `type` URIs.
   - Altering the idempotency behavior or the review completion requirements.
+
+### Changelog
+
+| Date | Version | Change |
+|---|---|---|
+| 2026-11-09 | v1 | First version: publish endpoint, RFC 9457 errors, state-based idempotency. |
+| 2026-11-11 | v1 (clarification) | Concurrent requests: exactly one performs the transition, the others get `Idempotent-Replayed: true` (was "either"). Added paging note, examples and existence-disclosure note. `labId` must be UUID v4, as section 1 already said. No change to paths, fields or statuses. |
+
+---
+
+## 6. Decisions and sources
+
+| Decision | Status | Source |
+|---|---|---|
+| A TA publishes only labs of a class they are assigned to. | From the brief: the TA reviews and presses Publish. | Class project brief, section 3 (Human gate). |
+| Marks are published only after every required review is done (all `violation`, all `unsure`, the random 10% of `pass`). | From the brief. | Class project brief, section 3 (Human gate). |
+| An admin may publish any lab (still subject to the review rule). | **Team decision. The brief lists the admin role but does not say who may publish. Not yet confirmed by the product owners.** | _Pending: add the product owners' FAQ entry (link and date) here, or change this row and the contract if they say no._ |
