@@ -4,8 +4,9 @@ import { errorHandlerMiddleware } from './middlewares/error.middleware';
 
 const app: Application = express();
 
-// Parse JSON request bodies (ignores unexpected fields safely)
-app.use(express.json());
+// No body parser on purpose: the publish endpoint takes no body, and the contract says
+// any body is ignored. A parser would turn a malformed body into a server error.
+// A future endpoint that reads a body adds express.json() on its own route.
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {

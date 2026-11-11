@@ -39,6 +39,12 @@ export const PROBLEM_TYPES = {
     code: 'LAB_NOT_FOUND',
     title: 'Lab not found'
   },
+  ROUTE_NOT_FOUND: {
+    slug: 'route-not-found',
+    status: 404,
+    code: 'ROUTE_NOT_FOUND',
+    title: 'Route not found'
+  },
   REVIEWS_PENDING: {
     slug: 'reviews-pending',
     status: 409,

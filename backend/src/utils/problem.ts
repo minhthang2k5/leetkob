@@ -58,6 +58,22 @@ export function sendNotFound(
   });
 }
 
+export function sendRouteNotFound(
+  res: Response,
+  instance: string,
+  detail = 'No endpoint exists for this path and method.'
+): Response {
+  const meta = PROBLEM_TYPES.ROUTE_NOT_FOUND;
+  return sendProblem(res, {
+    type: `${PROBLEM_BASE_URI}${meta.slug}`,
+    title: meta.title,
+    status: meta.status,
+    detail,
+    instance,
+    code: meta.code
+  });
+}
+
 export function sendInvalidRequest(
   res: Response,
   instance: string,
