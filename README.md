@@ -7,7 +7,7 @@
 
 Course: CSC13114 · Class 2609-AWAD-23/3  
 Milestone: PA#2 — Harness and Quality Gate  
-Authors: Team LeeTKOB (Product Owners: Le Tan Hiep, Tong Duong Thai Hoa, Nguyen Phuc Hoang)
+Authors: Team LeeTKOB — Tran Vu Quang (23120346), Trinh Ho Minh Thang (23120354), Vo Huu Thang (23120355)
 
 ---
 

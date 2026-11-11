@@ -2,6 +2,8 @@
 
 CSC13114 · PA#2 LeeTKOB · Team AI Log
 
+Team: Trần Vũ Quang (23120346), Trịnh Hồ Minh Thắng (23120354), Võ Hữu Thắng (23120355)
+
 ## 2026-11-08 — Team planning and role breakdown (PA#2)
 Tool: Antigravity (Gemini 3.8 Flash).  
 Asked for: analyze `PA2_TEAM_PLAN (1).md`, explain the scope, requirements, and break down tasks for a 3-person team.  

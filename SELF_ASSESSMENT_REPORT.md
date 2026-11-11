@@ -3,6 +3,14 @@
 CSC13114 · class 2609-AWAD-23/3 · team LeeTKOB
 Repository: https://github.com/minhthang2k5/leetkob · evidence links: [`PA2.md`](PA2.md)
 
+## Team
+
+| Student ID | Name |
+|---|---|
+| 23120346 | Trần Vũ Quang |
+| 23120354 | Trịnh Hồ Minh Thắng |
+| 23120355 | Võ Hữu Thắng |
+
 Each row below claims only what a file, commit, PR or CI run in the repository shows. Where a requirement is only partly met, the score says so.
 
 | # | Criterion | Max | Claimed | Evidence |
@@ -26,4 +34,4 @@ Each row below claims only what a file, commit, PR or CI run in the repository s
 
 ## ZIP name
 
-`<StudentID1>-<StudentID2>-<StudentID3>_98.zip` with the IDs in ascending order. If the total above changes, rename the file to match.
+`23120346-23120354-23120355_98.zip` (IDs in ascending order). If the total above changes, rename the file to match.

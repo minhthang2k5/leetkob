@@ -2,6 +2,14 @@
 
 CSC13114 · class 2609-AWAD-23/3 · due 2026-11-11 22:00
 
+## Team
+
+| Student ID | Name |
+|---|---|
+| 23120346 | Trần Vũ Quang |
+| 23120354 | Trịnh Hồ Minh Thắng |
+| 23120355 | Võ Hữu Thắng |
+
 Endpoint under contract: `POST /v1/labs/{labId}/publish`. Backend in `backend/`, contract in `docs/contract/publish.md`.
 
 ## Links
