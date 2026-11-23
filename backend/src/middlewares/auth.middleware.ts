@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../types/auth';
-import { prisma } from '../utils/prisma';
+import { findUserByToken } from '../services/auth.service';
 import { sendUnauthorized } from '../utils/problem';
 
 export async function authMiddleware(
@@ -22,13 +22,15 @@ export async function authMiddleware(
   }
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { token },
-      select: { id: true, name: true, role: true }
-    });
+    // A login session (contract B.3), or a PA#2 fixture token in the test database.
+    const user = await findUserByToken(token);
 
     if (!user) {
-      sendUnauthorized(res, req.originalUrl, 'Invalid or unrecognized Bearer token.');
+      sendUnauthorized(
+        res,
+        req.originalUrl,
+        'Invalid, expired or unrecognized Bearer token.'
+      );
       return;
     }
 

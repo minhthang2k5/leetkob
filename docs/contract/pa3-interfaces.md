@@ -197,7 +197,15 @@ RFC 9457 problem details exactly as in `publish.md` section 2. Every slug there 
 - `ClassSummary = { id, code, name }`: for a TA the classes they are assigned to, for a student the classes they are
   enrolled in, for an admin every class.
 - Passwords are hashed with `scrypt` from `node:crypto` (no new dependency) and a per-user salt. The token is an opaque
-  random string stored in the DB with an expiry; it is never a password and never logged.
+  random string (32 random bytes, base64url); the DB stores only its SHA-256 hash, so a copy of the DB holds no usable
+  token. It is never a password and never logged.
+- A token expires **12 hours** after login. After that, every route answers `401 unauthorized`, as for an unknown
+  token; the client logs in again. There is no logout endpoint in v1.
+- Login body validation: `username` and `password` are required strings, at most 100 and 200 characters. A body that is
+  missing, not JSON, or not an object is `400 invalid-request` with `errors[]` pointers (`/username`, `/password`).
+- The test accounts of the deployment (1 admin, 2 TAs of two classes, 2 students of the first TA's class) are created
+  by `npm run db:seed:accounts -w backend`, which reads their passwords from environment variables. No password is in git.
+- PA#2 fixture tokens (`users.token`) still authenticate in the test database only; deployed accounts have none.
 
 ### B.4 Labs
 
@@ -228,6 +236,18 @@ RFC 9457 problem details exactly as in `publish.md` section 2. Every slug there 
 - A student gets `tests: []` and constraints **without** `deduction` (hidden tests stay hidden).
 - A TA of another class gets `403 FORBIDDEN` on every lab route, as in `publish.md`.
 - Validation: at least 1 test and at least 1 constraint, constraint codes unique in the lab, `deduction` an integer ≥ 0.
+  Upper limits, each a `400 invalid-request` with a pointer such as `/tests/3/input`:
+
+  | Field | Limit |
+  |---|---|
+  | `title` | 1–200 characters |
+  | `statement` | 1–50 000 characters |
+  | `tests` | 1–50 items; `input` and `expectedOutput` strings of at most 64 KB (UTF-8) each, may be empty |
+  | `constraints` | 1–20 items; `code` 1–16 characters, `text` 1–2 000 characters, `deduction` integer 0–100 |
+  | whole body | at most 2 MB |
+
+- Unknown fields are ignored. The lab is created as `DRAFT`; tests keep the order they were sent in.
+- Every lab route answers in this order: `400` (id not a UUID v4), `404` (no such class or lab), `403` (not allowed).
 
 ### B.5 Submissions
 
@@ -252,8 +272,11 @@ Submission = {
 ```
 
 - The handler stores the row as `QUEUED` and returns. Judging happens only in the worker (A.4).
+- Only a **student enrolled in the lab's class** may submit; a TA or an admin gets `403 FORBIDDEN`. A published lab
+  takes no more submissions: `409 LAB_PUBLISHED`. `code` must not be blank and is at most 64 KB (UTF-8); the body at most 256 KB.
 - **Submission limit:** a student may submit at most **5 times per 10 minutes per lab**; above it `429 RATE_LIMITED`.
-  The numbers are N0's decision and may change in a PR to this file.
+  The window slides: `Retry-After` is the number of seconds until the oldest of those 5 leaves the window. Two
+  requests at the same moment cannot both pass the limit. The numbers are N0's decision and may change in a PR to this file.
 - Before the lab is published, a student's `Submission` **never** contains constraint verdicts or deductions.
 - A student asking for another student's submission gets `404 SUBMISSION_NOT_FOUND` (does not reveal that it exists).
 
@@ -291,7 +314,16 @@ Verdict = {
 { "decision": "CONFIRMED" | "OVERRIDDEN_PASS" | "OVERRIDDEN_VIOLATION", "note": "optional, at most 1000 chars" }
 ```
 
+- Who: a TA of the lab's class or an admin. A student or a TA of another class gets `403 FORBIDDEN`; the order is
+  `400` → `404` (`LAB_NOT_FOUND` / `VERDICT_NOT_FOUND`) → `403`, as in B.4.
+- `items` holds every submission of the lab, newest first, with its verdicts ordered by constraint code. A submission
+  the sandbox did not accept, or not judged yet, has `verdicts: []`.
+- `requiresReview` is computed, never stored: `verdict` is `VIOLATION` or `UNSURE`, or `isSampled` is true.
+- Review body: `decision` is required and one of the three values; `note` is optional, a string of at most 1 000
+  characters. Anything else is `400 invalid-request` with pointers `/decision`, `/note`. The review records who and when.
 - A review may be changed again until the lab is published; after that `409 LAB_PUBLISHED`.
+- The PA#2 table `submission_reviews` is replaced by these verdicts: publish now counts pending verdicts of the lab's
+  submissions. Behaviour of `publish.md` is unchanged.
 - `pendingCount` = verdicts with `requiresReview: true` and `isReviewed: false`. `POST /v1/labs/{labId}/publish`
   keeps refusing with `409 REVIEWS_PENDING` while it is above 0, as in `publish.md`.
 - The automatic verdict is kept; the TA's decision is stored next to it, so the eval can compare model and human.
@@ -303,6 +335,9 @@ Verdict = {
 | Date | Version | Change |
 |---|---|---|
 | 2026-11-23 | v1 | First version: package interfaces (judge, checkSubmission, SemanticJudge, queue) and the PA#3 endpoints. `publish.md` unchanged. |
+| 2026-11-23 | v1 (clarification) | B.3: token format, stored as a hash, 12-hour expiry, login body limits, how the test accounts are created, PA#2 fixture tokens. No path, field or status changes. |
+| 2026-11-23 | v1 (clarification) | B.4/B.5: upper size limits, order of 400/404/403, who may submit, sliding submission window and `Retry-After`. No path, field or status changes. |
+| 2026-11-23 | v1 (clarification) | B.6: who may review, order of answers, which submissions the queue lists, review body rules, publish reads the new verdicts. No path, field or status changes. |
 
 ## Decisions and sources
 

@@ -45,6 +45,7 @@ function uid(): string {
 function fail(status: number, code: string, detail: string, instance: string): never {
   const slug: Record<string, string> = {
     UNAUTHORIZED: 'unauthorized',
+    INVALID_CREDENTIALS: 'invalid-credentials',
     FORBIDDEN: 'forbidden',
     LAB_NOT_FOUND: 'not-found',
     REVIEWS_PENDING: 'reviews-pending',
@@ -213,7 +214,7 @@ export function createMockApi(getToken: () => string | null): Api {
         id: uid(),
         code: c.code,
         text: c.text,
-        deduction: c.deduction,
+        deduction: c.deduction ?? 0, // always set on a stored lab
         kind: kindOf(c.text)
       })),
       status: 'DRAFT',
@@ -394,7 +395,7 @@ export function createMockApi(getToken: () => string | null): Api {
         constraintId: c.id,
         constraintCode: c.code,
         constraintText: c.text,
-        deduction: c.deduction,
+        deduction: c.deduction ?? 0, // always set on a stored lab
         verdict,
         source,
         evidence,
@@ -433,7 +434,12 @@ export function createMockApi(getToken: () => string | null): Api {
     async login(username, password) {
       const user = users.find((u) => u.username === username.trim());
       if (!user || user.password !== password) {
-        fail(401, 'UNAUTHORIZED', 'Username or password is wrong.', '/v1/auth/login');
+        fail(
+          401,
+          'INVALID_CREDENTIALS',
+          'The username or password is incorrect.',
+          '/v1/auth/login'
+        );
       }
       const { id, name, role } = user;
       return delay({
@@ -487,7 +493,16 @@ export function createMockApi(getToken: () => string | null): Api {
       const instance = `/v1/labs/${labId}`;
       const u = currentUser(instance);
       const lab = labFor(labId, u, instance);
-      return delay(u.role === 'STUDENT' ? { ...lab, tests: [] } : lab);
+      // Same as the server (contract B.4): no hidden tests and no deductions for a student.
+      return delay(
+        u.role === 'STUDENT'
+          ? {
+              ...lab,
+              tests: [],
+              constraints: lab.constraints.map(({ deduction: _hidden, ...c }) => c)
+            }
+          : lab
+      );
     },
 
     async submit(labId, code) {

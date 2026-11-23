@@ -14,8 +14,12 @@ npm run dev          # real backend: /v1 is proxied to http://localhost:3000
 ```
 
 Mock accounts (mock mode only, password `demo`): `admin`, `ta.a` (class A), `ta.b`
-(class B), `sv.an`, `sv.binh` (students of class A). Point the proxy elsewhere with
-`VITE_BACKEND_URL=http://host:port npm run dev`.
+(class B), `sv.an`, `sv.binh` (students of class A).
+
+With the real backend (`npm run dev -w backend` from the repo root), the same usernames
+come from `npm run db:seed:accounts -w backend`, with the passwords you set in
+`backend/.env` (`SEED_PASSWORD_*`). If the backend runs on another port, put
+`VITE_BACKEND_URL=http://localhost:3001` in `frontend/.env.local` (ignored by git).
 
 ## Checks (same idea as `backend/`)
 
@@ -29,9 +33,8 @@ npm run build          # static files in dist/
 
 ## How it fits
 
-- `src/api/types.ts` and [`API.md`](API.md) are the endpoints the UI expects. They are a
-  draft from the frontend side; the backend contract in `docs/contract/` wins, and this
-  side follows it.
+- `src/api/types.ts` follows `docs/contract/pa3-interfaces.md` Part B; [`API.md`](API.md)
+  maps each call to its contract section.
 - `src/api/http.ts` talks only to this site's own `/v1`. In production serve `dist/` from
   the same host as the API, so there is no CORS and the browser never holds anything but
   the user's session token. **No model key or backend secret ever goes into the frontend.**

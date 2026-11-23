@@ -26,6 +26,22 @@ export function sendUnauthorized(
   });
 }
 
+export function sendInvalidCredentials(
+  res: Response,
+  instance: string,
+  detail = 'The username or password is incorrect.'
+): Response {
+  const meta = PROBLEM_TYPES.INVALID_CREDENTIALS;
+  return sendProblem(res, {
+    type: `${PROBLEM_BASE_URI}${meta.slug}`,
+    title: meta.title,
+    status: meta.status,
+    detail,
+    instance,
+    code: meta.code
+  });
+}
+
 export function sendForbidden(
   res: Response,
   instance: string,

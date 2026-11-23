@@ -8,6 +8,8 @@ export interface Problem {
   instance?: string;
   code: string;
   errors?: { parameter?: string; pointer?: string; detail: string }[];
+  /** From the Retry-After header of a 429 (contract B.5), in seconds. */
+  retryAfter?: number;
 }
 
 export class ApiError extends Error {
@@ -59,15 +61,26 @@ export function describeProblem(err: unknown): string {
     return err instanceof Error ? err.message : 'Đã có lỗi xảy ra. Tải lại trang.';
   }
   switch (err.code) {
+    case 'INVALID_CREDENTIALS':
+      return 'Sai tên đăng nhập hoặc mật khẩu.';
     case 'UNAUTHORIZED':
-      if (err.problem.instance?.endsWith('/auth/login')) {
-        return 'Sai tên đăng nhập hoặc mật khẩu.';
-      }
       return 'Phiên đăng nhập đã hết. Đăng nhập lại.';
     case 'FORBIDDEN':
-      return 'Mục này thuộc một lớp bạn không tham gia.';
+      return 'Bạn không có quyền với mục này (khác lớp, hoặc không đúng vai trò).';
     case 'LAB_NOT_FOUND':
       return 'Lab này không tồn tại hoặc đã bị xoá.';
+    case 'CLASS_NOT_FOUND':
+      return 'Lớp này không tồn tại.';
+    case 'SUBMISSION_NOT_FOUND':
+      return 'Không tìm thấy bài nộp này.';
+    case 'VERDICT_NOT_FOUND':
+      return 'Verdict này không còn nữa. Tải lại hàng đợi review.';
+    case 'LAB_PUBLISHED':
+      return 'Lab đã công bố điểm: không nộp thêm và không sửa review được nữa.';
+    case 'RATE_LIMITED': {
+      const minutes = Math.max(1, Math.ceil((err.problem.retryAfter ?? 60) / 60));
+      return `Bạn đã nộp 5 lần trong 10 phút. Thử lại sau khoảng ${minutes} phút.`;
+    }
     case 'ROUTE_NOT_FOUND':
       return 'Máy chủ chưa có chức năng này. Kiểm tra backend đã cập nhật chưa.';
     case 'REVIEWS_PENDING':

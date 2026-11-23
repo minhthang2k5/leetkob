@@ -44,9 +44,10 @@ export function CreateLabPage() {
     problems.push('Cần ít nhất một test có output.');
   constraints.forEach((c, i) => {
     if (!c.text.trim()) problems.push(`Ràng buộc C${i + 1} chưa có nội dung.`);
+    // Same limit as the server (contract B.4): a whole number from 0 to 100.
     const d = Number(c.deduction);
-    if (c.deduction === '' || !Number.isFinite(d) || d < 0) {
-      problems.push(`Ràng buộc C${i + 1} cần mức trừ là một số không âm.`);
+    if (c.deduction === '' || !Number.isInteger(d) || d < 0 || d > 100) {
+      problems.push(`Ràng buộc C${i + 1} cần mức trừ là số nguyên từ 0 đến 100.`);
     }
   });
 

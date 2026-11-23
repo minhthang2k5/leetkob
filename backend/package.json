@@ -4,7 +4,7 @@
   "description": "LeeTKOB - C++ Lab Grading and Constraint Verification Platform (PA#2 Backend)",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --conditions=source src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "lint": "eslint src tests --ext .ts",
@@ -18,12 +18,15 @@
     "prisma:migrate": "prisma migrate dev",
     "db:migrate": "prisma migrate deploy",
     "db:test:setup": "node scripts/db-test-setup.js",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "db:seed:accounts": "tsx prisma/accounts.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@leetkob/checker": "0.1.0",
+    "@leetkob/shared": "0.1.0",
     "@prisma/client": "^5.21.1",
     "dotenv": "^16.4.5",
     "express": "^4.21.1"
