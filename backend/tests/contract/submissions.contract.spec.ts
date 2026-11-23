@@ -18,6 +18,11 @@ const otherLabId = labs.adminReady.id; // class A, DRAFT
 const PEER_TOKEN = 'token-student-peer';
 const OUTSIDER_TOKEN = 'token-student-not-enrolled';
 const UNKNOWN_ID = '9b2f1c4e-6a3d-4f8b-9c1e-2d5a7b8c9d0e';
+// The seed's judged submissions (review states for publish) belong to this fixture
+// student; counts below leave them out.
+const notFixture = { studentId: { not: users.reviewedStudent.id } };
+const fromTests = (s: { studentName: string }) =>
+  s.studentName !== users.reviewedStudent.name;
 const CODE = '#include <iostream>\nint main() { return 0; }\n';
 
 const as = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -92,7 +97,9 @@ describe('Submissions contract (B.5)', () => {
         where: { id: res.body.id }
       });
       expect(row).toMatchObject({ status: 'QUEUED', attempts: 0, code: CODE });
-      expect(await prisma.constraintVerdict.count()).toBe(0);
+      expect(
+        await prisma.constraintVerdict.count({ where: { submissionId: res.body.id } })
+      ).toBe(0);
     });
 
     it('SB-02: a TA, an admin or a student not enrolled cannot submit -> 403', async () => {
@@ -106,7 +113,7 @@ describe('Submissions contract (B.5)', () => {
           `/v1/labs/${labId}/submissions`
         );
       }
-      expect(await prisma.submission.count()).toBe(0);
+      expect(await prisma.submission.count({ where: notFixture })).toBe(0);
     });
 
     it('SB-03: a published lab takes no submission -> 409 lab-published', async () => {
@@ -174,7 +181,7 @@ describe('Submissions contract (B.5)', () => {
       const retryAfter = Number(res.headers['retry-after']);
       expect(retryAfter).toBeGreaterThan(SUBMISSION_WINDOW_MS / 1000 - 30);
       expect(retryAfter).toBeLessThanOrEqual(SUBMISSION_WINDOW_MS / 1000);
-      expect(await prisma.submission.count()).toBe(SUBMISSION_LIMIT);
+      expect(await prisma.submission.count({ where: notFixture })).toBe(SUBMISSION_LIMIT);
 
       expect((await submit(TEST_TOKENS.STUDENT, { code: CODE }, otherLabId)).status).toBe(
         202
@@ -205,7 +212,7 @@ describe('Submissions contract (B.5)', () => {
       );
 
       expect(results.map((r) => r.status).sort()).toEqual([202, 429, 429, 429]);
-      expect(await prisma.submission.count()).toBe(SUBMISSION_LIMIT);
+      expect(await prisma.submission.count({ where: notFixture })).toBe(SUBMISSION_LIMIT);
     });
   });
 
@@ -228,10 +235,13 @@ describe('Submissions contract (B.5)', () => {
       const all = await request(app)
         .get(`/v1/labs/${labId}/submissions`)
         .set(as(TEST_TOKENS.TA_CLASS_A));
-      expect(all.body).toHaveLength(3);
-      expect(all.body.map((s: { studentName: string }) => s.studentName).sort()).toEqual(
-        [users.student.name, users.student.name, 'Student Peer'].sort()
-      );
+      expect(all.body.filter(fromTests)).toHaveLength(3);
+      expect(
+        all.body
+          .filter(fromTests)
+          .map((s: { studentName: string }) => s.studentName)
+          .sort()
+      ).toEqual([users.student.name, users.student.name, 'Student Peer'].sort());
     });
 
     it('SB-10: one submission: owner, TA of the class and admin may read it', async () => {

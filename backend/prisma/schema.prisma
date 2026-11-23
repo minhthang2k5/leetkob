@@ -148,8 +148,7 @@ model Lab {
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
 
-  class       Class              @relation(fields: [classId], references: [id], onDelete: Cascade)
-  reviews     SubmissionReview[]
+  class       Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
   tests       TestCase[]
   constraints Constraint[]
   submissions Submission[]
@@ -274,18 +273,4 @@ model ModelCall {
 
   @@index([submissionId])
   @@map("model_calls")
-}
-
-model SubmissionReview {
-  id           String        @id @default(uuid())
-  labId        String
-  submissionId String?
-  verdict      ReviewVerdict
-  isSampled    Boolean       @default(false)
-  isReviewed   Boolean       @default(false)
-  createdAt    DateTime      @default(now())
-
-  lab Lab @relation(fields: [labId], references: [id], onDelete: Cascade)
-
-  @@map("submission_reviews")
 }

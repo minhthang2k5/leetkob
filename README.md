@@ -44,7 +44,7 @@ leetkob/
 │   ├── docker/initdb/           # Creates the isolated leetkob_test database
 │   ├── scripts/                 # db-test-setup.js (migrations for the test DB)
 │   ├── prisma/
-│   │   ├── schema.prisma        # Models: User, Class, ClassTA, Lab, SubmissionReview
+│   │   ├── schema.prisma        # Models: users, classes, labs, tests, constraints, submissions, verdicts, sessions, model calls
 │   │   └── seed.ts              # Canonical test fixtures for the contract tests
 │   ├── src/                     # Express application source code
 │   │   ├── app.ts               # In-memory Express instance (imported by Supertest)

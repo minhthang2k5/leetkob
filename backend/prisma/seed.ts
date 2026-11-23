@@ -46,6 +46,14 @@ export const SEED_DATA = {
       name: 'Student Charlie',
       role: Role.STUDENT,
       token: 'token-student'
+    },
+    // Owns the judged fixture submissions behind the review states below; never logs in.
+    reviewedStudent: {
+      id: '10000000-0000-4000-8000-000000000005',
+      username: 'fixture.reviewed',
+      name: 'Student Reviewed (fixture)',
+      role: Role.STUDENT,
+      token: null
     }
   },
   classes: {
@@ -108,7 +116,7 @@ export const SEED_DATA = {
 
 export async function seedDatabase(client: PrismaClient = prisma) {
   // Clean existing records in reverse dependency order
-  await client.submissionReview.deleteMany();
+  // Deleting labs and users cascades to tests, constraints, submissions, verdicts, sessions.
   await client.lab.deleteMany();
   await client.classTA.deleteMany();
   await client.class.deleteMany();
@@ -151,56 +159,58 @@ export async function seedDatabase(client: PrismaClient = prisma) {
     ]
   });
 
-  // 5. Seed Submission Reviews
-  await client.submissionReview.createMany({
-    data: [
-      // Lab ready: all reviews resolved
-      {
-        labId: SEED_DATA.labs.ready.id,
-        verdict: ReviewVerdict.VIOLATION,
-        isSampled: false,
-        isReviewed: true
-      },
-      {
-        labId: SEED_DATA.labs.ready.id,
-        verdict: ReviewVerdict.PASS,
-        isSampled: true,
-        isReviewed: true
-      },
-
-      // Lab admin ready: all reviews resolved
-      {
-        labId: SEED_DATA.labs.adminReady.id,
-        verdict: ReviewVerdict.PASS,
-        isSampled: true,
-        isReviewed: true
-      },
-
-      // Lab pending violation: 1 unreviewed VIOLATION
-      {
-        labId: SEED_DATA.labs.pendingViolation.id,
-        verdict: ReviewVerdict.VIOLATION,
-        isSampled: false,
-        isReviewed: false
-      },
-
-      // Lab pending sampled pass: 1 unreviewed sampled PASS
-      {
-        labId: SEED_DATA.labs.pendingSampledPass.id,
-        verdict: ReviewVerdict.PASS,
-        isSampled: true,
-        isReviewed: false
-      },
-
-      // Lab concurrent ready: all reviews resolved
-      {
-        labId: SEED_DATA.labs.concurrent.id,
-        verdict: ReviewVerdict.PASS,
-        isSampled: true,
-        isReviewed: true
+  // 5. Review states (publish.md 3.2), as judged submissions with one verdict each.
+  // Code "F1" and an old date keep these rows out of the way of PA#3 tests and of the
+  // submission limit. Each row: [lab, verdict, isSampled, isReviewed].
+  const reviewStates: [string, ReviewVerdict, boolean, boolean][] = [
+    // ready: every required review done
+    [SEED_DATA.labs.ready.id, ReviewVerdict.VIOLATION, false, true],
+    [SEED_DATA.labs.ready.id, ReviewVerdict.PASS, true, true],
+    [SEED_DATA.labs.adminReady.id, ReviewVerdict.PASS, true, true],
+    // pendingViolation: 1 unreviewed VIOLATION
+    [SEED_DATA.labs.pendingViolation.id, ReviewVerdict.VIOLATION, false, false],
+    // pendingSampledPass: 1 unreviewed sampled PASS
+    [SEED_DATA.labs.pendingSampledPass.id, ReviewVerdict.PASS, true, false],
+    [SEED_DATA.labs.concurrent.id, ReviewVerdict.PASS, true, true]
+  ];
+  const judgedAt = new Date('2026-11-08T05:00:00.000Z');
+  const constraintOf = new Map<string, string>();
+  for (const [labId, verdict, isSampled, isReviewed] of reviewStates) {
+    if (!constraintOf.has(labId)) {
+      const c = await client.constraint.create({
+        data: {
+          labId,
+          code: 'F1',
+          text: 'Do not use `std::sort`.',
+          deduction: 1,
+          kind: 'BAN_LIST'
+        }
+      });
+      constraintOf.set(labId, c.id);
+    }
+    await client.submission.create({
+      data: {
+        labId,
+        studentId: SEED_DATA.users.reviewedStudent.id,
+        code: 'int main() { return 0; }\n',
+        status: 'JUDGED',
+        result: 'ACCEPTED',
+        testsPassed: 1,
+        testsTotal: 1,
+        createdAt: judgedAt,
+        judgedAt,
+        verdicts: {
+          create: {
+            constraintId: constraintOf.get(labId)!,
+            verdict,
+            source: 'HARD_RULE',
+            isSampled,
+            isReviewed
+          }
+        }
       }
-    ]
-  });
+    });
+  }
 
   console.log('[Seed] Database populated successfully with test fixtures.');
 }

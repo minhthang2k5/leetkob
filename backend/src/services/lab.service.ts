@@ -1,6 +1,22 @@
-import { LabStatus, ReviewVerdict, Role } from '@prisma/client';
+import { LabStatus, Prisma, ReviewVerdict, Role } from '@prisma/client';
 import { prisma } from '../utils/prisma';
 import { AuthenticatedUser } from '../types/auth';
+
+/**
+ * A required review still to do (publish.md 3.2): every VIOLATION, every UNSURE and the
+ * sampled PASS verdicts, not yet reviewed. The review queue counts with the same filter.
+ */
+export function pendingReviewWhere(labId: string): Prisma.ConstraintVerdictWhereInput {
+  return {
+    submission: { labId },
+    isReviewed: false,
+    OR: [
+      { verdict: ReviewVerdict.VIOLATION },
+      { verdict: ReviewVerdict.UNSURE },
+      { isSampled: true }
+    ]
+  };
+}
 
 export interface PublishResult {
   receipt: {
@@ -80,16 +96,9 @@ export async function publishLab(
   }
 
   // Step 7: Business Invariant (Required Reviews Check)
-  const pendingCount = await prisma.submissionReview.count({
-    where: {
-      labId,
-      isReviewed: false,
-      OR: [
-        { verdict: ReviewVerdict.VIOLATION },
-        { verdict: ReviewVerdict.UNSURE },
-        { isSampled: true }
-      ]
-    }
+  // Verdicts of this lab's submissions that need a TA (pa3-interfaces.md B.6).
+  const pendingCount = await prisma.constraintVerdict.count({
+    where: pendingReviewWhere(labId)
   });
 
   if (pendingCount > 0) {
