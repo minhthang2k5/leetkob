@@ -67,7 +67,7 @@ leetkob/
 
 ## 3. The 4 Deterministic Quality Gate Checks
 
-Per project rules and rubric requirements, each quality gate is triggered via a single, non-interactive command inside `backend/`:
+Per project rules and rubric requirements, each quality gate is triggered via a single, non-interactive command from the repo root (it runs in every npm workspace: `shared`, `sandbox`, `checker`, `worker`, `backend`):
 
 | Check | Command | Description |
 |---|---|---|
@@ -88,12 +88,14 @@ Per project rules and rubric requirements, each quality gate is triggered via a 
 ### Step 1: Clone the repository
 ```bash
 git clone https://github.com/minhthang2k5/leetkob.git
-cd leetkob/backend
+cd leetkob
 ```
 
 ### Step 2: Install dependencies
+One lockfile at the repo root installs every workspace. The later steps run inside `backend/`.
 ```bash
-npm install
+npm ci
+cd backend
 ```
 
 ### Step 3: Setup environment variables

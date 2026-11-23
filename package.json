@@ -1,0 +1,23 @@
+{
+  "name": "leetkob",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LeeTKOB monorepo: backend API, sandbox, checker, worker and shared types (frontend/ has its own lockfile)",
+  "workspaces": [
+    "shared",
+    "sandbox",
+    "checker",
+    "worker",
+    "backend"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:libs": "npm run build -w @leetkob/shared -w @leetkob/sandbox -w @leetkob/checker",
+    "lint": "npm run lint --workspaces --if-present",
+    "format:check": "npm run format:check --workspaces --if-present",
+    "typecheck": "npm run build:libs && npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
