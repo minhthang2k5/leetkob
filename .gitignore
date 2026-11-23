@@ -71,3 +71,7 @@ Desktop.ini
 # Local submission archives
 /*_submission.zip
 /[0-9]*_[0-9]*.zip
+
+# Local Claude Code skills and their lock file (tooling on one machine, not part of the project)
+.claude/
+skills-lock.json
