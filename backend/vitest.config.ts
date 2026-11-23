@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // Workspace packages (@leetkob/checker...) are imported from source in tests.
+  resolve: { conditions: ['source'] },
   test: {
     globals: true,
     environment: 'node',

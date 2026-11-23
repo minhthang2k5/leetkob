@@ -15,6 +15,7 @@
   },
   "scripts": {
     "build:libs": "npm run build -w @leetkob/shared -w @leetkob/sandbox -w @leetkob/checker",
+    "build": "npm run build:libs && npm run build -w backend",
     "lint": "npm run lint --workspaces --if-present",
     "format:check": "npm run format:check --workspaces --if-present",
     "typecheck": "npm run build:libs && npm run typecheck --workspaces --if-present",

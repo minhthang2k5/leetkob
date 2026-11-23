@@ -6,26 +6,13 @@ import { FIXTURE_PASSWORD, SEED_DATA } from '../../prisma/seed';
 import { SESSION_TTL_MS, hashToken, login } from '../../src/services/auth.service';
 import { TEST_TOKENS } from '../helpers/test-tokens';
 import { disconnectTestDatabase, resetTestDatabase } from '../helpers/test-db';
+import { expectProblem } from '../helpers/problem';
 
 // docs/contract/pa3-interfaces.md, B.2 (errors) and B.3 (auth).
 const { users, classes } = SEED_DATA;
-const PROBLEM = 'https://leetkob.example/problems/';
 
 function loginAs(username: string, password = FIXTURE_PASSWORD) {
   return request(app).post('/v1/auth/login').send({ username, password });
-}
-
-function expectProblem(
-  res: request.Response,
-  status: number,
-  slug: string,
-  code: string,
-  instance: string
-) {
-  expect(res.status).toBe(status);
-  expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
-  expect(res.body).toMatchObject({ type: `${PROBLEM}${slug}`, status, code, instance });
-  expect(typeof res.body.title).toBe('string');
 }
 
 describe('Auth contract (B.3)', () => {

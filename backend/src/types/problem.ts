@@ -57,6 +57,30 @@ export const PROBLEM_TYPES = {
     code: 'REVIEWS_PENDING',
     title: 'Required reviews are pending'
   },
+  CLASS_NOT_FOUND: {
+    slug: 'class-not-found',
+    status: 404,
+    code: 'CLASS_NOT_FOUND',
+    title: 'Class not found'
+  },
+  SUBMISSION_NOT_FOUND: {
+    slug: 'submission-not-found',
+    status: 404,
+    code: 'SUBMISSION_NOT_FOUND',
+    title: 'Submission not found'
+  },
+  LAB_PUBLISHED: {
+    slug: 'lab-published',
+    status: 409,
+    code: 'LAB_PUBLISHED',
+    title: 'Lab already published'
+  },
+  RATE_LIMITED: {
+    slug: 'rate-limited',
+    status: 429,
+    code: 'RATE_LIMITED',
+    title: 'Too many submissions'
+  },
   INTERNAL: {
     slug: 'internal',
     status: 500,
