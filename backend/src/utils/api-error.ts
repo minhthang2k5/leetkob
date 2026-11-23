@@ -37,6 +37,11 @@ export function sendApiError(res: Response, instance: string, error: ApiError): 
   });
 }
 
+/** A name chosen by our code or a library, never text from the request. */
+export function errorKind(error: unknown): string {
+  return error instanceof Error ? error.constructor.name : typeof error;
+}
+
 /** Runs a handler body: ApiError -> its problem, anything else -> a generic 500. */
 export async function respond(
   res: Response,
@@ -55,7 +60,9 @@ export async function respond(
       sendApiError(res, instance, error);
       return;
     }
-    console.error('[Unhandled]', (error as Error).message);
+    // Only the error's class name: the message can carry request data (an id, a body
+    // field), and logging it raw lets a client forge log lines (log injection).
+    console.error('[Unhandled]', errorKind(error));
     sendInternalError(res, instance);
   }
 }
