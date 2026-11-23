@@ -1,6 +1,6 @@
 # Kế hoạch thực hiện phần Người 1 PA3
 
-Cập nhật ngày 23/11/2026 theo `main@314db5a` và commit contract `007b3b5`. Đã hoàn thành phase 1 (sandbox) và phase 2 (bộ test), dừng trước phase 3 (worker). Lượt đầy đủ đạt 72/72 test sandbox và 176/176 test trên mọi workspace; xem [báo cáo kiểm chứng](../../sandbox/VERIFICATION.md).
+Cập nhật ngày 23/11/2026 theo `main@314db5a`, contract compile `007b3b5` và contract worker `01d2f4e`. Phase 1–2 đã hoàn thành tại `51fa920`. **Đã xong bước 4/phase worker với checker giả được inject trong test:** 32/32 test worker và 207/207 test toàn repo đạt; xem [báo cáo worker](../../worker/VERIFICATION.md) và [hướng dẫn chạy](../../worker/README.md). Checker thật của Người 2 còn là placeholder. Chưa bắt đầu bước 5 deploy.
 
 Người 1 phụ trách sandbox, worker, bộ test bài nộp và bảo mật, đóng gói, deploy Azure, tag và video. Luồng cần hoàn thành là: bài nộp `QUEUED` → worker nhận bài → sandbox compile/chạy test → bài `ACCEPTED` được checker kiểm tra ràng buộc → lưu kết quả để TA review và publish.
 
@@ -134,6 +134,8 @@ Claim Submission QUEUED
 ```
 
 - Claim bằng transaction ngắn với `FOR UPDATE SKIP LOCKED`, ưu tiên bài cũ. Job chỉ mang `submissionId`.
+- Khóa hàng lab trong lúc claim và kiểm tra lại bằng snapshot mới: tối đa một attempt đang chạy khỏe mạnh trên mỗi lab; các lab khác nhau vẫn có thể chạy song song. Nhờ đó checker tiếp theo thấy chi phí đã commit của lab.
+- `lockedAt` là lease: heartbeat mỗi 15 giây; không được gia hạn sau khi đã hết hạn 2 phút. Mọi kết quả được kiểm tra theo `submissionId`, `attempts` và trạng thái sở hữu.
 - Không giữ transaction trong lúc compile/chạy bài hoặc gọi model.
 - Chỉ truyền statement, constraints và code gốc cho checker; checker tự xử lý comment. Không truyền danh tính hoặc deduction.
 - Lưu kết quả sandbox và thời gian chấm vào các field hiện có của `Submission`.
@@ -142,9 +144,10 @@ Claim Submission QUEUED
 - Hoàn tất dữ liệu trong transaction có kiểm tra quyền sở hữu lượt xử lý. Dùng `attempts` làm dấu nhận diện để worker cũ không ghi đè worker mới.
 - Lỗi hạ tầng được nhận lại tối đa 3 lần tổng cộng; hết lượt chuyển `FAILED`. Wrong Answer/Compile Error vẫn là `JUDGED`, không retry như lỗi hạ tầng.
 - Shutdown ngừng claim bài mới, thu hồi sandbox và để job chưa hoàn tất được khôi phục.
+- SIGINT/SIGTERM cho job hiện tại 10 giây hoàn tất; sau đó hủy sandbox hoặc bỏ kết quả checker đến muộn. Startup đối chiếu label submission/attempt của container với lease trong DB để chỉ thu hồi container mồ côi.
 - Không tuyên bố lời gọi model luôn đúng một lần qua mọi tình huống crash; mục tiêu là có thể xử lý lại mà không nhân đôi bộ verdict.
 
-Khai báo Prisma client trực tiếp cho worker, cùng phiên bản repo, theo quy trình duyệt dependency/lockfile của nhóm; không dựa vào dependency tình cờ được hoist từ backend.
+Prisma client đã được khai báo trực tiếp trong worker theo phê duyệt của người dùng: cùng range `^5.21.1` như backend và giữ nguyên phiên bản 5.22.0 trong lockfile. Không đổi schema.
 
 ### Test worker bắt buộc
 
@@ -161,11 +164,12 @@ Khai báo Prisma client trực tiếp cho worker, cùng phiên bản repo, theo 
 
 | Điểm | Điều cần thống nhất | Chủ phối hợp |
 |---|---|---|
-| Cap model theo lab | Contract yêu cầu checker biết chi phí đã dùng, nhưng `CheckOptions` chưa có cách truyền. Worker tổng hợp từ `ModelCall`; chốt interface trước khi nối model thật. | Minh Thắng và Người 2 |
-| Job chạy quá 2 phút | Contract mới quy định thu hồi theo `lockedAt`, chưa quy định heartbeat. Lab có tối đa 50 test; làm rõ lease/heartbeat trước khi triển khai gia hạn. | Minh Thắng |
+| Cap model theo lab | Đã được người dùng duyệt, ghi contract riêng `01d2f4e`: `CheckOptions.labSpentUsd/labCapUsd`. Worker tổng hợp chi phí đã lưu; Người 2 còn phải triển khai quyết định gọi model theo cap. Crash trước commit vẫn có thể phát sinh chi phí chưa ghi nhận. | Người 2 |
+| Job chạy quá 2 phút | Đã được người dùng duyệt và ghi cùng commit contract: heartbeat 15s, thu hồi sau 2 phút không heartbeat, chặn attempt cũ ghi đè. Đã triển khai. | Đã giải quyết trong bước 4 |
+| Checker thật | `checkSubmission()` của package hiện vẫn là placeholder; CLI worker dùng export thật và không tự thay bằng fake. Test inject checker giả; model-on CLI cần nối adapter của Người 2 trước production. | Người 2 |
 | Publish khi còn bài đang chấm | Code đếm verdict cần review; chưa quy định chặn bài `QUEUED/RUNNING`. Chốt chính sách và test tương ứng. | Minh Thắng |
 
-Không tự sửa contract/backend để giải quyết các điểm trên. Chúng không chặn sandbox và phần nhận/lưu job cơ bản, nhưng phải được xử lý trước khi xác nhận E2E production hoàn chỉnh.
+Hai thay đổi contract đã được người dùng cho phép rõ ràng và commit trước implementation. Không tự đổi backend/policy publish. Checker thật và chính sách publish khi còn job phải được giải quyết trước khi xác nhận E2E production hoàn chỉnh; test hiện có xác nhận luồng review/publish sau khi chấm xong.
 
 ## 5. Deploy Azure và bàn giao
 
@@ -204,12 +208,12 @@ Nguồn Azure: [điều kiện Students](https://azure.microsoft.com/en-us/prici
 
 - [x] Phase 1: sandbox chấm bài thật, đúng contract, giới hạn và cleanup trong runner.
 - [x] Phase 2: 39 bài SV và 9 nhóm bảo mật chạy qua Docker thật; 72/72 test sandbox đạt.
-- [ ] Worker nối Postgres thật với checker giả, có retry và khôi phục.
+- [x] Bước 4/phase worker: Postgres thật với checker giả được inject, có retry, heartbeat, khôi phục và cleanup; 32/32 test worker đạt, gồm Docker/process/API thật.
 - [ ] Nối checker thật và giải quyết các điểm contract cần phối hợp.
 - [ ] Azure chạy HTTPS và E2E: đăng nhập → tạo lab → nộp → chấm → checker → review → publish.
 - [ ] Xác nhận SV không thấy verdict/deduction trước publish, TA lớp khác bị từ chối và restart không mất bài/nhân đôi verdict.
 - [ ] Backup/restore và quy trình rollback được kiểm chứng.
-- [x] Chạy bốn quality gates từ root: `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm test`; 176/176 test đạt ngày 23/11/2026.
+- [x] Chạy bốn quality gates từ root: `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm test`; 207/207 test đạt ngày 23/11/2026 sau bước 4 (trước đó phase 1–2: 176/176).
 - [ ] Chạy kiểm tra frontend riêng tại giai đoạn tích hợp và deploy.
 - [ ] CI trên tag `pa3` đạt; bàn giao hướng dẫn deploy, báo cáo test và video không quá 5 phút.
 

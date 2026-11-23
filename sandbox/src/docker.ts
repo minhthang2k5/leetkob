@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import type { JudgeResult, Limits } from '@leetkob/shared';
+import { sandboxScope } from './context';
 
 export const SANDBOX_IMAGE = 'leetkob-sandbox:pa3';
 export const SANDBOX_LABEL = 'leetkob.sandbox=true';
@@ -50,6 +51,14 @@ export function containerArguments(
     'none',
     '--tmpfs',
     '/work:rw,exec,nosuid,nodev,size=64m,mode=1777',
+    ...(sandboxScope.getStore()
+      ? [
+          '--label',
+          `leetkob.submission=${sandboxScope.getStore()!.submissionId}`,
+          '--label',
+          `leetkob.attempt=${sandboxScope.getStore()!.attempt}`
+        ]
+      : []),
     '--interactive',
     SANDBOX_IMAGE,
     mode,
@@ -103,10 +112,30 @@ export async function runContainer(
   limits: Limits
 ): Promise<ContainerOutcome> {
   const name = `leetkob-${randomUUID()}`;
+  const scope = sandboxScope.getStore();
+  let abortCleanup: Promise<void> | undefined;
+  const abort = () => {
+    abortCleanup ??= dockerCommand(['rm', '--force', name]).then(
+      () => {},
+      () => {}
+    );
+  };
   let created = false;
+  const cleanup = async () => {
+    try {
+      await dockerCommand(['rm', '--force', name]);
+    } catch (error) {
+      if (!scope?.signal.aborted) throw error;
+    }
+  };
   try {
+    if (scope?.signal.aborted)
+      throw new SandboxInfrastructureError('Sandbox attempt cancelled');
     await dockerCommand(containerArguments(name, limits, mode));
     created = true;
+    scope?.signal.addEventListener('abort', abort, { once: true });
+    if (scope?.signal.aborted)
+      throw new SandboxInfrastructureError('Sandbox attempt cancelled');
     let wallExpired = false;
     let outputExceeded = false;
     const stdout: Buffer[] = [];
@@ -188,6 +217,8 @@ export async function runContainer(
       });
     });
     if (killPromise) await killPromise.catch(() => {});
+    if (scope?.signal.aborted)
+      throw new SandboxInfrastructureError('Sandbox attempt cancelled');
     const state = JSON.parse(
       await dockerCommand(['inspect', '--format', '{{json .State}}', name])
     ) as {
@@ -210,6 +241,8 @@ export async function runContainer(
     else throw new SandboxInfrastructureError('Trusted sandbox runner failed');
     return { result, stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) };
   } finally {
-    if (created) await dockerCommand(['rm', '--force', name]);
+    scope?.signal.removeEventListener('abort', abort);
+    if (abortCleanup) await abortCleanup;
+    if (created) await cleanup();
   }
 }

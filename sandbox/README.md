@@ -22,7 +22,7 @@ The integration suite builds `leetkob-sandbox:pa3` from `sandbox/Dockerfile` bef
 docker build -t leetkob-sandbox:pa3 sandbox
 ```
 
-Runtime callers must build/provision this image first. An absent image or unreachable daemon raises `SandboxInfrastructureError`, allowing the future worker to retry. Compilation errors, wrong answers and resource violations return `JudgeOutcome` instead.
+Runtime callers must build/provision this image first. An absent image or unreachable daemon raises `SandboxInfrastructureError`, allowing the worker to retry. Compilation errors, wrong answers and resource violations return `JudgeOutcome` instead.
 
 ## Execution and boundaries
 
@@ -34,7 +34,7 @@ The supervisor uses a CPU rlimit and cgroup v2 aggregate CPU accounting, includi
 
 Both compile and run use network none, UID/GID 1000, equal memory/memory-swap, a pids limit, a read-only root, no capabilities, no-new-privileges and no persistent container logs. A 64 MiB `tmpfs /work` is the only application scratch area and counts toward the container memory cap. No host folder, Docker socket or server environment is supplied. The supervisor constructs a minimal child environment; model credentials are never needed.
 
-The runner removes its own container in `finally`, including after resource failures. It never scans and deletes other workers' containers. Recovery of containers left behind by a killed Node process requires the future worker to correlate container/job ownership and is outside phase 1–2.
+The runner removes its own container in `finally`, including after resource failures. Worker integration adds `withSandboxAttempt(attempt, signal, run)`, `listSandboxAttempts()` and `cleanupSandboxAttempt(attempt)`: containers carry submission/attempt labels, and aborting their scoped signal removes them. The worker correlates those labels with live PostgreSQL leases before reclaiming orphans after process death. A plain `judge()` call retains its original interface; it does not scan other workers' containers. See [worker lifecycle and recovery](../worker/README.md).
 
 Output comparison removes trailing spaces/tabs per line and trailing empty lines. Internal spaces, leading spaces and internal newlines remain significant. CRLF is normalized to LF. Evaluation stops at the first failed test, while `testsTotal` always reports the entire supplied test list.
 

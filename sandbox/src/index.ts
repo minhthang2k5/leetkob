@@ -5,6 +5,7 @@ import { COMPILATION_BUDGET, runContainer, SandboxInfrastructureError } from './
 import { outputsEqual } from './output';
 
 export { SandboxInfrastructureError } from './docker';
+export { withSandboxAttempt, cleanupSandboxAttempt, listSandboxAttempts } from './scope';
 
 /** Default limits from docs/contract/pa3-interfaces.md, A.1. */
 export const DEFAULT_LIMITS: Limits = {

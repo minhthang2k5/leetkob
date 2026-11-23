@@ -86,6 +86,10 @@ export interface CheckVerdict {
 }
 
 export interface CheckOptions {
+  /** Persisted model spend for the current lab; no lab identity is sent. */
+  labSpentUsd?: number;
+  /** The checker enforces this configured cap before calling its model. */
+  labCapUsd?: number;
   /** MODEL_OFF=1: hard rules only, semantic constraints become UNSURE, no network */
   modelOff: boolean;
   /** required when modelOff is false */

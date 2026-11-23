@@ -48,4 +48,4 @@ Môi trường kiểm chứng: Windows, Node v24.20.0, Docker Desktop Linux Engi
 
 ## Phạm vi bàn giao
 
-Đã hoàn thành sandbox và bộ test của phase 1–2. Chưa triển khai vòng lặp worker, checker thật, deploy Azure, video, tag hoặc CI từ xa. Việc thu hồi container sau khi tiến trình Node bị kill cứng cần cơ chế liên kết job/lượt xử lý ở phase worker; runner hiện cleanup container của chính nó trong `finally`.
+Đây là kết quả tại mốc bàn giao phase 1–2 (`51fa920`), trước khi triển khai worker. Báo cáo giữ nguyên số liệu của lượt chạy đó. Phần worker bổ sung sau mốc này có báo cáo riêng tại [worker/VERIFICATION.md](../worker/VERIFICATION.md), gồm liên kết container với job/attempt và thu hồi container mồ côi. Checker thật, deploy Azure, video, tag và CI từ xa vẫn thuộc các bước tiếp theo.
