@@ -3,11 +3,13 @@ name: CI
 # The same four commands a developer runs locally from the repo root (see README / AGENTS.md).
 # They run in every npm workspace: shared, sandbox, checker, worker, backend.
 # Each is its own job so each shows up as its own required check on `main`.
+# PA#3 adds four jobs: frontend, sandbox, checker and eval-data. Graders read the sandbox
+# job of the run on the `pa3` tag (rubric criterion 2). No job has a model API key.
 on:
   pull_request:
     branches: [main]
   push:
-    tags: [pa2]
+    tags: [pa2, pa3]
   workflow_dispatch:
 
 permissions:
@@ -88,3 +90,73 @@ jobs:
       - run: npm run prisma:generate -w backend
       - run: npm run db:test:setup -w backend
       - run: npm test
+
+  # ---------------------------------------------------------------- PA#3
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          # frontend/ keeps its own lockfile (not an npm workspace yet).
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  sandbox:
+    name: sandbox
+    # GitHub-hosted Ubuntu runners have Docker: the attack submissions run against the
+    # real sandbox here (owner N1, sandbox/attacks/).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: docker version --format 'Docker {{.Server.Version}}'
+      - run: npm ci --ignore-scripts
+      - run: npm test -w @leetkob/sandbox
+
+  checker:
+    name: checker
+    # Model off: hard rules only, semantic constraints UNSURE, no network call (contract A.2).
+    # Tests use FakeJudge, so this job needs no key. N2 adds the CLI and Docker image steps.
+    runs-on: ubuntu-latest
+    env:
+      MODEL_OFF: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm test -w @leetkob/checker
+
+  eval-data:
+    name: eval-data
+    # The dev set must be byte-identical to the published one (rubric criterion 6).
+    # On a PR a missing copy is a warning; on the pa3 tag it fails the run.
+    runs-on: ubuntu-latest
+    env:
+      REQUIRE_EVAL_DATA: ${{ startsWith(github.ref, 'refs/tags/pa3') && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: node scripts/check-eval-data.mjs
