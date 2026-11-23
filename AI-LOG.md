@@ -107,3 +107,10 @@ Asked for: review and fix the failing PR #11 checks.
 Found: the original GitHub CI run 45209907800 passed all eight jobs. SonarCloud failed its security rating on a world-writable filesystem probe directory and PATH-based Docker launches; it also flagged backtracking in output normalization.
 Changed: the probe is owned by UID 1000 with mode 0700 (its existing EROFS assertion and fixture remain unchanged); Docker launches use known absolute installation paths; output trimming uses a linear backwards scan. Kept the same GCC image digest, removed its redundant tag, and extracted exit classification without changing verdict behavior. No checks or rules were disabled.
 Verified locally before push: sandbox lint, format:check, typecheck and 14 targeted regression tests passed, including Docker with PATH empty and a long significant whitespace run. Full CI and SonarCloud are rerun on the fix; their final results must be read from the new run, not inferred from the old one.
+
+## 2026-11-23 — Người 1: CI shutdown fixture timestamp tie
+
+Tool: Codex.
+Found: on fix commit 1be1ac7 SonarCloud passed with zero open vulnerabilities and seven CI jobs passed, but root test failed when shutdown waited for the first-inserted submission to become RUNNING. PostgreSQL can give consecutive inserts equal millisecond timestamps; the queue legitimately orders those ties by UUID, so it can claim the second insert instead. A diagnostic against the guarded test DB reproduced this using equal timestamps and reversed UUID order, then removed its own fixtures.
+Changed: the user explicitly approved clarifying createdAt/id ordering in contract commit 9617d65 on PR #10. Only after that commit, two queue fixtures requiring an older first job explicitly set its createdAt earlier. The fixture correction has its own commit, without implementation changes, assertion removal or timeout changes. No rule, test, check or label was loosened.
+Verified locally: 27/27 queue/sampling/wiring tests passed, plus worker lint, format:check and typecheck. Full remote CI is rerun on the new head before reporting completion.
