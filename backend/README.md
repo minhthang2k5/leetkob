@@ -18,8 +18,11 @@ Built for CSC13114 (PA#2: Harness and Quality Gate) implementing `POST /v1/labs/
 ## Quickstart Guide (Local Development)
 
 ### 1. Install Dependencies
+Run at the repo root (npm workspaces, one lockfile), then come back to `backend/`:
 ```bash
-npm install
+cd ..
+npm ci
+cd backend
 ```
 
 ### 2. Configure Environment Variables

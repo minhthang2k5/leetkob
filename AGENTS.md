@@ -1,27 +1,28 @@
 # AGENTS.md — rules for AI assistants working on LeeTKOB
 
-Read `docs/contract/publish.md` first: it is the specification. If code and contract
+Read `docs/contract/publish.md` and `docs/contract/pa3-interfaces.md` first: they are the specification. If code and contract
 disagree, the code is wrong.
 
 ## 1. Stack
 
 - Node.js 20, TypeScript (strict), Express 4, Prisma 5, PostgreSQL 16.
 - Vitest + Supertest for tests; ESLint + Prettier for style.
-- Everything lives in `backend/`. One endpoint so far: `POST /v1/labs/{labId}/publish`.
+- npm workspaces at the repo root: `shared/` (types), `sandbox/`, `checker/`, `worker/`, `backend/`.
+  `frontend/` has its own lockfile and is not a workspace yet.
 - Errors are RFC 9457 problem details (`application/problem+json`), types listed in the contract.
 
 ## 2. Commands
 
-Run from `backend/`. These four are the quality gate; CI runs exactly these.
+Run from the repo root; each runs in every workspace. These four are the quality gate; CI runs exactly these.
 
 ```bash
 npm run lint
 npm run format:check      # fix with: npm run format
 npm run typecheck
-npm test                  # needs: docker compose up -d, then once: npm run db:test:setup
+npm test                  # backend needs: docker compose up -d, then once: npm run db:test:setup -w backend
 ```
 
-Setup: `npm ci`, `npm run init:env`, `docker compose up -d`, `npx prisma generate`.
+Setup: `npm ci` at the root, then in `backend/`: `npm run init:env`, `docker compose up -d`, `npm run prisma:generate`.
 
 ## 3. Conventions
 
