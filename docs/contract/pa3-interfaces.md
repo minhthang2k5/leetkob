@@ -29,8 +29,8 @@ Owners: **N0** = backend, API, DB, CI (Minh Thắng) · **N1** = sandbox, worker
 
 ```ts
 export interface Limits {
-  cpuSeconds: number;   // default 2
-  wallSeconds: number;  // default 5; past it the whole container is killed
+  cpuSeconds: number;   // default 2 per test execution (compilation budget is separate, rule 4)
+  wallSeconds: number;  // default 5 per test execution; past it the whole container is killed
   memoryMb: number;     // default 256; swap = memory (no extra swap)
   pids: number;         // default 64
   outputBytes: number;  // default 64 * 1024
@@ -57,7 +57,10 @@ Rules:
 1. A fault of the submission (wrong output, timeout, memory, crash, compile error) **returns** a `JudgeOutcome`; it never throws.
 2. `judge()` throws only when the infrastructure fails (for example the Docker daemon is down). The worker then retries.
 3. Stops at the first failing test. Output comparison ignores trailing spaces on each line and trailing empty lines.
-4. Compilation runs inside the sandbox too.
+4. Compilation runs inside the sandbox too, with a separate fixed budget of **10 CPU seconds and 20 wall seconds**.
+   `Limits.cpuSeconds` and `Limits.wallSeconds` apply to each execution of the student's program, not to the compiler.
+   The memory, swap, pids and output restrictions and all isolation flags still apply during compilation.
+   This avoids charging GCC's header parsing/linking against the student's 2-second runtime budget.
 5. `judge()` never receives an API key or any server environment variable.
 
 ### A.2 `checkSubmission()` — checker (owner N2)
@@ -338,6 +341,7 @@ Verdict = {
 | 2026-11-23 | v1 (clarification) | B.3: token format, stored as a hash, 12-hour expiry, login body limits, how the test accounts are created, PA#2 fixture tokens. No path, field or status changes. |
 | 2026-11-23 | v1 (clarification) | B.4/B.5: upper size limits, order of 400/404/403, who may submit, sliding submission window and `Retry-After`. No path, field or status changes. |
 | 2026-11-23 | v1 (clarification) | B.6: who may review, order of answers, which submissions the queue lists, review body rules, publish reads the new verdicts. No path, field or status changes. |
+| 2026-11-23 | v1 (clarification, user approved) | A.1: CPU/wall limits apply per test execution; compilation has a separate 10s CPU/20s wall budget with the same isolation and other resource restrictions. Real GCC compilation of valid submissions sometimes exceeded 2 CPU seconds. No interface or result enum changes. |
 
 ## Decisions and sources
 
