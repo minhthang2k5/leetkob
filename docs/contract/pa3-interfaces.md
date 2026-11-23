@@ -156,6 +156,8 @@ export interface JudgeJob { submissionId: string } // the only payload
 
 Rules:
 1. The queue is the `submissions` table in Postgres. The worker claims a job with `SELECT ... FOR UPDATE SKIP LOCKED`. No Redis.
+   Eligible jobs are ordered by `createdAt` ascending, then `id` ascending when timestamps are equal.
+   Equal timestamps do not establish insertion order; fixtures requiring an older job must use distinct timestamps.
 2. The job carries only `submissionId`. The worker reads code, tests and constraints from the DB. No code or secret in the job.
 3. Status: `QUEUED → RUNNING → JUDGED`, or `FAILED` after 3 attempts. Columns `attempts` and `lockedAt`.
    `lockedAt` is a renewable lease: the owner refreshes it every 15 seconds while working.
@@ -351,6 +353,7 @@ Verdict = {
 | 2026-11-23 | v1 (clarification) | B.6: who may review, order of answers, which submissions the queue lists, review body rules, publish reads the new verdicts. No path, field or status changes. |
 | 2026-11-23 | v1 (clarification, user approved) | A.1: CPU/wall limits apply per test execution; compilation has a separate 10s CPU/20s wall budget with the same isolation and other resource restrictions. Real GCC compilation of valid submissions sometimes exceeded 2 CPU seconds. No interface or result enum changes. |
 | 2026-11-23 | v1 (additive and clarification, user approved) | A.2/A.4: worker supplies lab spend/cap values; lockedAt is a renewable lease with a 15s heartbeat, 2-minute expiry and attempt fencing. No schema change. |
+| 2026-11-23 | v1 (clarification, user approved) | A.4: claim order is createdAt, then id for timestamp ties. CI exposed a shutdown fixture assuming two same-millisecond inserts had distinct ages; no queue behavior or timeout changes. |
 
 ## Decisions and sources
 
