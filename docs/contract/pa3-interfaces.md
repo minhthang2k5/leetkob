@@ -236,6 +236,18 @@ RFC 9457 problem details exactly as in `publish.md` section 2. Every slug there 
 - A student gets `tests: []` and constraints **without** `deduction` (hidden tests stay hidden).
 - A TA of another class gets `403 FORBIDDEN` on every lab route, as in `publish.md`.
 - Validation: at least 1 test and at least 1 constraint, constraint codes unique in the lab, `deduction` an integer ≥ 0.
+  Upper limits, each a `400 invalid-request` with a pointer such as `/tests/3/input`:
+
+  | Field | Limit |
+  |---|---|
+  | `title` | 1–200 characters |
+  | `statement` | 1–50 000 characters |
+  | `tests` | 1–50 items; `input` and `expectedOutput` strings of at most 64 KB (UTF-8) each, may be empty |
+  | `constraints` | 1–20 items; `code` 1–16 characters, `text` 1–2 000 characters, `deduction` integer 0–100 |
+  | whole body | at most 2 MB |
+
+- Unknown fields are ignored. The lab is created as `DRAFT`; tests keep the order they were sent in.
+- Every lab route answers in this order: `400` (id not a UUID v4), `404` (no such class or lab), `403` (not allowed).
 
 ### B.5 Submissions
 
@@ -260,8 +272,11 @@ Submission = {
 ```
 
 - The handler stores the row as `QUEUED` and returns. Judging happens only in the worker (A.4).
+- Only a **student enrolled in the lab's class** may submit; a TA or an admin gets `403 FORBIDDEN`. A published lab
+  takes no more submissions: `409 LAB_PUBLISHED`. `code` must not be blank and is at most 64 KB (UTF-8); the body at most 256 KB.
 - **Submission limit:** a student may submit at most **5 times per 10 minutes per lab**; above it `429 RATE_LIMITED`.
-  The numbers are N0's decision and may change in a PR to this file.
+  The window slides: `Retry-After` is the number of seconds until the oldest of those 5 leaves the window. Two
+  requests at the same moment cannot both pass the limit. The numbers are N0's decision and may change in a PR to this file.
 - Before the lab is published, a student's `Submission` **never** contains constraint verdicts or deductions.
 - A student asking for another student's submission gets `404 SUBMISSION_NOT_FOUND` (does not reveal that it exists).
 
@@ -312,6 +327,7 @@ Verdict = {
 |---|---|---|
 | 2026-11-23 | v1 | First version: package interfaces (judge, checkSubmission, SemanticJudge, queue) and the PA#3 endpoints. `publish.md` unchanged. |
 | 2026-11-23 | v1 (clarification) | B.3: token format, stored as a hash, 12-hour expiry, login body limits, how the test accounts are created, PA#2 fixture tokens. No path, field or status changes. |
+| 2026-11-23 | v1 (clarification) | B.4/B.5: upper size limits, order of 400/404/403, who may submit, sliding submission window and `Retry-After`. No path, field or status changes. |
 
 ## Decisions and sources
 
