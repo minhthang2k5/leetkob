@@ -24,54 +24,236 @@ enum ReviewVerdict {
   PASS
 }
 
+// ---- PA#3: see docs/contract/pa3-interfaces.md --------------------------------
+
+enum ConstraintKind {
+  BAN_LIST
+  SEMANTIC
+}
+
+enum SubmissionStatus {
+  QUEUED
+  RUNNING
+  JUDGED
+  FAILED
+}
+
+enum JudgeResult {
+  ACCEPTED
+  WRONG_ANSWER
+  TIME_LIMIT
+  MEMORY_LIMIT
+  RUNTIME_ERROR
+  COMPILE_ERROR
+  OUTPUT_LIMIT
+}
+
+enum VerdictSource {
+  HARD_RULE
+  MODEL
+  GUARDRAIL
+}
+
+enum ReviewDecision {
+  CONFIRMED
+  OVERRIDDEN_PASS
+  OVERRIDDEN_VIOLATION
+}
+
+enum ModelCallStatus {
+  OK
+  TIMEOUT
+  API_ERROR
+}
+
 model User {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   name      String
   role      Role
-  token     String    @unique
-  createdAt DateTime  @default(now())
+  token     String   @unique
+  createdAt DateTime @default(now())
 
   // Classes where this user is assigned as TA
-  assignedClasses ClassTA[]
+  assignedClasses  ClassTA[]
+  // Classes where this user is enrolled as a student
+  enrollments      ClassStudent[]
+  submissions      Submission[]
+  reviewedVerdicts ConstraintVerdict[]
 
   @@map("users")
 }
 
 model Class {
-  id        String    @id @default(uuid())
-  code      String    @unique
+  id        String   @id @default(uuid())
+  code      String   @unique
   name      String
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
 
-  tas       ClassTA[]
-  labs      Lab[]
+  tas      ClassTA[]
+  students ClassStudent[]
+  labs     Lab[]
 
   @@map("classes")
 }
 
 model ClassTA {
-  classId   String
-  userId    String
+  classId String
+  userId  String
 
-  class     Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([classId, userId])
   @@map("class_tas")
 }
 
+model ClassStudent {
+  classId String
+  userId  String
+
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([classId, userId])
+  @@map("class_students")
+}
+
 model Lab {
-  id          String             @id @default(uuid())
+  id          String    @id @default(uuid())
   classId     String
   title       String
-  status      LabStatus          @default(DRAFT)
+  // Markdown problem statement shown to students and sent to the checker
+  statement   String    @default("")
+  status      LabStatus @default(DRAFT)
   publishedAt DateTime?
-  createdAt   DateTime           @default(now())
+  createdAt   DateTime  @default(now())
 
   class       Class              @relation(fields: [classId], references: [id], onDelete: Cascade)
   reviews     SubmissionReview[]
+  tests       TestCase[]
+  constraints Constraint[]
+  submissions Submission[]
 
   @@map("labs")
+}
+
+/// Hidden test of a lab. Students never receive these (contract B.4).
+model TestCase {
+  id             String @id @default(uuid())
+  labId          String
+  /// 0-based order in which the sandbox runs the tests
+  position       Int
+  input          String
+  expectedOutput String
+
+  lab Lab @relation(fields: [labId], references: [id], onDelete: Cascade)
+
+  @@unique([labId, position])
+  @@map("test_cases")
+}
+
+model Constraint {
+  id        String         @id @default(uuid())
+  labId     String
+  /// "C1", "C2"... unique inside a lab
+  code      String
+  text      String
+  /// Marks deducted on a confirmed violation. Belongs to the TA; never sent to the checker.
+  deduction Int
+  kind      ConstraintKind
+
+  lab      Lab                 @relation(fields: [labId], references: [id], onDelete: Cascade)
+  verdicts ConstraintVerdict[]
+
+  @@unique([labId, code])
+  @@map("constraints")
+}
+
+/// A submission is also the job of the queue (contract A.4): the worker claims a QUEUED
+/// row with SELECT ... FOR UPDATE SKIP LOCKED.
+model Submission {
+  id            String           @id @default(uuid())
+  labId         String
+  studentId     String
+  code          String
+  status        SubmissionStatus @default(QUEUED)
+  result        JudgeResult?
+  testsPassed   Int?
+  testsTotal    Int?
+  /// At most 4 KB, only for COMPILE_ERROR
+  compileOutput String?
+  durationMs    Int?
+  /// Number of times a worker claimed this row; FAILED after 3
+  attempts      Int              @default(0)
+  /// Set when a worker claims the row; RUNNING rows locked more than 2 minutes go back to QUEUED
+  lockedAt      DateTime?
+  /// Last infrastructure error, for the TA/admin only (never the student's code output)
+  lastError     String?
+  createdAt     DateTime         @default(now())
+  judgedAt      DateTime?
+
+  lab        Lab                 @relation(fields: [labId], references: [id], onDelete: Cascade)
+  student    User                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  verdicts   ConstraintVerdict[]
+  modelCalls ModelCall[]
+
+  // Worker: oldest QUEUED first
+  @@index([status, createdAt])
+  // Student history and the submission limit (contract B.5)
+  @@index([labId, studentId, createdAt])
+  @@map("submissions")
+}
+
+/// One automatic verdict per (submission, constraint), plus the TA's review of it.
+/// The unique key makes judging idempotent: the worker upserts on it.
+model ConstraintVerdict {
+  id           String          @id @default(uuid())
+  submissionId String
+  constraintId String
+  verdict      ReviewVerdict
+  source       VerdictSource
+  /// [{ "line": 12, "text": "std::sort(a, a + n);" }], lines of the code as submitted
+  evidence     Json            @default("[]")
+  reason       String?
+  /// Part of the random 10% of PASS verdicts sent to review
+  isSampled    Boolean         @default(false)
+  isReviewed   Boolean         @default(false)
+  decision     ReviewDecision?
+  reviewNote   String?
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime        @default(now())
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  constraint Constraint @relation(fields: [constraintId], references: [id], onDelete: Cascade)
+  reviewedBy User?      @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([submissionId, constraintId])
+  @@index([constraintId])
+  @@map("constraint_verdicts")
+}
+
+/// One call to the model provider (contract A.3, ModelCallLog). Proves which prompt was
+/// sent, and feeds the cost cap per lab.
+model ModelCall {
+  id           String          @id @default(uuid())
+  submissionId String
+  provider     String
+  model        String
+  requestId    String?
+  inputTokens  Int
+  outputTokens Int
+  ms           Int
+  costUsd      Float
+  status       ModelCallStatus
+  /// The anonymised prompt (no comments, no identity)
+  prompt       String
+  createdAt    DateTime        @default(now())
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@map("model_calls")
 }
 
 model SubmissionReview {
@@ -83,8 +265,7 @@ model SubmissionReview {
   isReviewed   Boolean       @default(false)
   createdAt    DateTime      @default(now())
 
-  lab          Lab           @relation(fields: [labId], references: [id], onDelete: Cascade)
+  lab Lab @relation(fields: [labId], references: [id], onDelete: Cascade)
 
   @@map("submission_reviews")
 }
-
