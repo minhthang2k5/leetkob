@@ -43,6 +43,11 @@ describe('Postgres queue and attempt ownership', () => {
     const fixture = await graph(db);
     const first = await submission(db, fixture);
     await submission(db, fixture);
+    // Contract A.4: same-millisecond inserts are ordered by id, not insertion.
+    await db.submission.update({
+      where: { id: first.id },
+      data: { createdAt: new Date(0) }
+    });
     const claims = await Promise.all([store.claim(), new SubmissionStore(other).claim()]);
     expect(claims.filter(Boolean)).toHaveLength(1);
     expect(claims.find(Boolean)?.submissionId).toBe(first.id);
@@ -480,6 +485,11 @@ describe('worker orchestration and persistence', () => {
       first = await submission(db, fixture);
     const second = await submission(db, fixture),
       gate = deferred<JudgeOutcome>();
+    // Make this the older job explicitly (contract A.4), independent of DB speed.
+    await db.submission.update({
+      where: { id: first.id },
+      data: { createdAt: new Date(0) }
+    });
     const controller = new AbortController();
     const run = createWorker(
       store,
