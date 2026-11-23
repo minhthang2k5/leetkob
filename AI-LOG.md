@@ -81,3 +81,12 @@ Asked for: raise criterion 2 by making `.env.example` list every variable withou
 Kept: the four variable names and the dev/test database split.
 Changed: `.env.example` now holds names only, and a new `npm run init:env` fills the local development defaults into `.env` and never overwrites an existing one; checked on a fresh clone with all four checks green (20/20 tests).
 Rejected: claiming a spending cap for a model key that does not exist (the assistant refused to word it that way); scoring criterion 2 at 10 (the self-score is 8).
+
+## 2026-11-23 — Người 1: sandbox phase 1–2
+
+Tool: Codex.
+Asked for: implement only the C++ sandbox and its tests, with complete realistic student attempts and nine bounded security probes; stop before the worker.
+Kept: shared interfaces, deterministic output comparison, compile inside Docker, network none, UID 1000, equal memory/swap, pids cap, read-only root, dropped capabilities, no-new-privileges, no server env or host bind mounts, and per-test isolation.
+Changed: real GCC compilation sometimes exceeded the initial 2-second CPU budget. The user explicitly approved separating compilation (10 CPU seconds / 20 wall seconds) from program execution (2 / 5); contract commit `007b3b5` precedes implementation. No dependency or schema was added. After a machine reset, both memory checks passed with their original 2s CPU / 5s wall / 256 MiB settings, unchanged source and expected verdicts.
+Verified: root lint, format:check, typecheck and npm test all returned 0. Sandbox: 72/72 tests against real Docker, including 36 baseline student attempts, 3 resource mistakes, 9 security groups and boundary/recovery checks. All workspaces: 176 tests passed (shared 3, sandbox 72, checker 12, worker wiring 1, backend 88). Backend tests used leetkob_test only. See sandbox/VERIFICATION.md.
+Rejected: relabelling failures or increasing the memory-test CPU limit without approval; passing student output off as supervisor metadata; claiming worker, deployment, remote CI or model evaluation is complete. No real model was called, no key was created, and the published dev set was not changed.

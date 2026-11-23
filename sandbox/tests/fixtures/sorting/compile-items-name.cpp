@@ -1,0 +1,14 @@
+#include <algorithm>
+#include <iostream>
+#include <numeric>
+#include <string>
+#include <vector>
+using namespace std;
+
+int main() {
+    int n; cin >> n; vector<int> a(n);
+    for (int &x : a) cin >> x;
+    sort(items.begin(), items.end());
+    for (int i = 0; i < n; ++i) cout << (i ? " " : "") << a[i];
+    cout << "\n";
+}
