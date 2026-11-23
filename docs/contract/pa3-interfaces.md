@@ -197,7 +197,15 @@ RFC 9457 problem details exactly as in `publish.md` section 2. Every slug there 
 - `ClassSummary = { id, code, name }`: for a TA the classes they are assigned to, for a student the classes they are
   enrolled in, for an admin every class.
 - Passwords are hashed with `scrypt` from `node:crypto` (no new dependency) and a per-user salt. The token is an opaque
-  random string stored in the DB with an expiry; it is never a password and never logged.
+  random string (32 random bytes, base64url); the DB stores only its SHA-256 hash, so a copy of the DB holds no usable
+  token. It is never a password and never logged.
+- A token expires **12 hours** after login. After that, every route answers `401 unauthorized`, as for an unknown
+  token; the client logs in again. There is no logout endpoint in v1.
+- Login body validation: `username` and `password` are required strings, at most 100 and 200 characters. A body that is
+  missing, not JSON, or not an object is `400 invalid-request` with `errors[]` pointers (`/username`, `/password`).
+- The test accounts of the deployment (1 admin, 2 TAs of two classes, 2 students of the first TA's class) are created
+  by `npm run db:seed:accounts -w backend`, which reads their passwords from environment variables. No password is in git.
+- PA#2 fixture tokens (`users.token`) still authenticate in the test database only; deployed accounts have none.
 
 ### B.4 Labs
 
@@ -303,6 +311,7 @@ Verdict = {
 | Date | Version | Change |
 |---|---|---|
 | 2026-11-23 | v1 | First version: package interfaces (judge, checkSubmission, SemanticJudge, queue) and the PA#3 endpoints. `publish.md` unchanged. |
+| 2026-11-23 | v1 (clarification) | B.3: token format, stored as a hash, 12-hour expiry, login body limits, how the test accounts are created, PA#2 fixture tokens. No path, field or status changes. |
 
 ## Decisions and sources
 
