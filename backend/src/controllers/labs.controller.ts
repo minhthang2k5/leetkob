@@ -2,9 +2,14 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../types/auth';
 import { ProblemErrorDetail } from '../types/problem';
 import { ApiError, respond } from '../utils/api-error';
-import { validateNewLab, validateNewSubmission } from '../validation/lab.validation';
+import {
+  validateNewLab,
+  validateNewSubmission,
+  validateReview
+} from '../validation/lab.validation';
 import { createLab, getLab, listLabs } from '../services/labs.service';
 import { getSubmission, listSubmissions, submit } from '../services/submissions.service';
+import { getReviewQueue, reviewVerdict } from '../services/reviews.service';
 
 function invalid(errors: ProblemErrorDetail[]): ApiError {
   return new ApiError('INVALID_REQUEST', 'The request payload failed validation.', {
@@ -39,3 +44,13 @@ export const getSubmissionHandler = (req: AuthenticatedRequest, res: Response) =
   respond(res, req.originalUrl, 200, () =>
     getSubmission(req.user!, req.params.submissionId)
   );
+
+export const reviewQueueHandler = (req: AuthenticatedRequest, res: Response) =>
+  respond(res, req.originalUrl, 200, () => getReviewQueue(req.user!, req.params.labId));
+
+export const reviewVerdictHandler = (req: AuthenticatedRequest, res: Response) =>
+  respond(res, req.originalUrl, 200, async () => {
+    const parsed = validateReview(req.body);
+    if (!parsed.ok) throw invalid(parsed.errors);
+    return reviewVerdict(req.user!, req.params.verdictId, parsed.value);
+  });

@@ -12,6 +12,8 @@ import {
   getSubmissionHandler,
   listLabsHandler,
   listSubmissionsHandler,
+  reviewQueueHandler,
+  reviewVerdictHandler,
   submitHandler
 } from '../controllers/labs.controller';
 
@@ -19,6 +21,7 @@ const router = Router();
 const classId = validateUuidParam('classId');
 const labId = validateLabIdMiddleware;
 const submissionId = validateUuidParam('submissionId');
+const verdictId = validateUuidParam('verdictId');
 
 // PA#2 (docs/contract/publish.md): unchanged.
 router.post('/labs/:labId/publish', authMiddleware, labId, publishLabHandler);
@@ -47,6 +50,16 @@ router.get(
   authMiddleware,
   submissionId,
   getSubmissionHandler
+);
+
+// Review queue (B.6): TA of the class or admin.
+router.get('/labs/:labId/review-queue', authMiddleware, labId, reviewQueueHandler);
+router.post(
+  '/verdicts/:verdictId/review',
+  authMiddleware,
+  verdictId,
+  jsonBody('16kb'),
+  reviewVerdictHandler
 );
 
 export default router;

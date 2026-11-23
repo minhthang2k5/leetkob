@@ -69,6 +69,12 @@ export const PROBLEM_TYPES = {
     code: 'SUBMISSION_NOT_FOUND',
     title: 'Submission not found'
   },
+  VERDICT_NOT_FOUND: {
+    slug: 'verdict-not-found',
+    status: 404,
+    code: 'VERDICT_NOT_FOUND',
+    title: 'Verdict not found'
+  },
   LAB_PUBLISHED: {
     slug: 'lab-published',
     status: 409,

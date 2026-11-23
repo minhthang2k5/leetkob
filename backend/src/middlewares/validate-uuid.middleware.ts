@@ -5,7 +5,9 @@ const UUID_V4_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** 400 invalid-request unless the path parameter is a canonical UUID v4 (contract B.1). */
-export function validateUuidParam(name: 'classId' | 'submissionId' | 'labId') {
+export function validateUuidParam(
+  name: 'classId' | 'submissionId' | 'labId' | 'verdictId'
+) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const value = req.params[name];
     if (!value || !UUID_V4_REGEX.test(value)) {

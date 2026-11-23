@@ -155,3 +155,42 @@ export function validateNewSubmission(body: unknown): Result<{ code: string }> {
     ? { ok: false, errors }
     : { ok: true, value: { code: code as string } };
 }
+
+export const REVIEW_NOTE_MAX = 1_000;
+const DECISIONS = ['CONFIRMED', 'OVERRIDDEN_PASS', 'OVERRIDDEN_VIOLATION'] as const;
+export type Decision = (typeof DECISIONS)[number];
+
+/** Contract B.6: `decision` required, `note` optional (at most 1 000 characters). */
+export function validateReview(
+  body: unknown
+): Result<{ decision: Decision; note: string | null }> {
+  if (!isObject(body)) {
+    return {
+      ok: false,
+      errors: [{ pointer: '', detail: 'Body must be a JSON object.' }]
+    };
+  }
+  const errors: ProblemErrorDetail[] = [];
+  const decision = body.decision;
+  if (
+    typeof decision !== 'string' ||
+    !(DECISIONS as readonly string[]).includes(decision)
+  ) {
+    errors.push({
+      pointer: '/decision',
+      detail: `Must be one of ${DECISIONS.join(', ')}.`
+    });
+  }
+  const note = body.note ?? null;
+  if (note !== null && typeof note !== 'string') {
+    errors.push({ pointer: '/note', detail: 'Must be a string.' });
+  } else if (typeof note === 'string' && note.length > REVIEW_NOTE_MAX) {
+    errors.push({ pointer: '/note', detail: `At most ${REVIEW_NOTE_MAX} characters.` });
+  }
+  return errors.length
+    ? { ok: false, errors }
+    : {
+        ok: true,
+        value: { decision: decision as Decision, note: note as string | null }
+      };
+}
