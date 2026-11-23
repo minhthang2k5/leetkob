@@ -314,7 +314,16 @@ Verdict = {
 { "decision": "CONFIRMED" | "OVERRIDDEN_PASS" | "OVERRIDDEN_VIOLATION", "note": "optional, at most 1000 chars" }
 ```
 
+- Who: a TA of the lab's class or an admin. A student or a TA of another class gets `403 FORBIDDEN`; the order is
+  `400` → `404` (`LAB_NOT_FOUND` / `VERDICT_NOT_FOUND`) → `403`, as in B.4.
+- `items` holds every submission of the lab, newest first, with its verdicts ordered by constraint code. A submission
+  the sandbox did not accept, or not judged yet, has `verdicts: []`.
+- `requiresReview` is computed, never stored: `verdict` is `VIOLATION` or `UNSURE`, or `isSampled` is true.
+- Review body: `decision` is required and one of the three values; `note` is optional, a string of at most 1 000
+  characters. Anything else is `400 invalid-request` with pointers `/decision`, `/note`. The review records who and when.
 - A review may be changed again until the lab is published; after that `409 LAB_PUBLISHED`.
+- The PA#2 table `submission_reviews` is replaced by these verdicts: publish now counts pending verdicts of the lab's
+  submissions. Behaviour of `publish.md` is unchanged.
 - `pendingCount` = verdicts with `requiresReview: true` and `isReviewed: false`. `POST /v1/labs/{labId}/publish`
   keeps refusing with `409 REVIEWS_PENDING` while it is above 0, as in `publish.md`.
 - The automatic verdict is kept; the TA's decision is stored next to it, so the eval can compare model and human.
@@ -328,6 +337,7 @@ Verdict = {
 | 2026-11-23 | v1 | First version: package interfaces (judge, checkSubmission, SemanticJudge, queue) and the PA#3 endpoints. `publish.md` unchanged. |
 | 2026-11-23 | v1 (clarification) | B.3: token format, stored as a hash, 12-hour expiry, login body limits, how the test accounts are created, PA#2 fixture tokens. No path, field or status changes. |
 | 2026-11-23 | v1 (clarification) | B.4/B.5: upper size limits, order of 400/404/403, who may submit, sliding submission window and `Retry-After`. No path, field or status changes. |
+| 2026-11-23 | v1 (clarification) | B.6: who may review, order of answers, which submissions the queue lists, review body rules, publish reads the new verdicts. No path, field or status changes. |
 
 ## Decisions and sources
 
