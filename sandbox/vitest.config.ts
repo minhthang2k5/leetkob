@@ -6,6 +6,9 @@ export default defineConfig({
   resolve: { conditions: ['source'] },
   test: {
     environment: 'node',
-    include: ['tests/**/*.spec.ts']
+    include: ['tests/**/*.spec.ts'],
+    fileParallelism: false,
+    reporters: ['verbose'],
+    testTimeout: 120000
   }
 });

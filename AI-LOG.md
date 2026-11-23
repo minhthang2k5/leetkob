@@ -81,3 +81,36 @@ Asked for: raise criterion 2 by making `.env.example` list every variable withou
 Kept: the four variable names and the dev/test database split.
 Changed: `.env.example` now holds names only, and a new `npm run init:env` fills the local development defaults into `.env` and never overwrites an existing one; checked on a fresh clone with all four checks green (20/20 tests).
 Rejected: claiming a spending cap for a model key that does not exist (the assistant refused to word it that way); scoring criterion 2 at 10 (the self-score is 8).
+
+## 2026-11-23 — Người 1: sandbox phase 1–2
+
+Tool: Codex.
+Asked for: implement only the C++ sandbox and its tests, with complete realistic student attempts and nine bounded security probes; stop before the worker.
+Kept: shared interfaces, deterministic output comparison, compile inside Docker, network none, UID 1000, equal memory/swap, pids cap, read-only root, dropped capabilities, no-new-privileges, no server env or host bind mounts, and per-test isolation.
+Changed: real GCC compilation sometimes exceeded the initial 2-second CPU budget. The user explicitly approved separating compilation (10 CPU seconds / 20 wall seconds) from program execution (2 / 5); contract commit `007b3b5` precedes implementation. No dependency or schema was added. After a machine reset, both memory checks passed with their original 2s CPU / 5s wall / 256 MiB settings, unchanged source and expected verdicts.
+Verified: root lint, format:check, typecheck and npm test all returned 0. Sandbox: 72/72 tests against real Docker, including 36 baseline student attempts, 3 resource mistakes, 9 security groups and boundary/recovery checks. All workspaces: 176 tests passed (shared 3, sandbox 72, checker 12, worker wiring 1, backend 88). Backend tests used leetkob_test only. See sandbox/VERIFICATION.md.
+Rejected: relabelling failures or increasing the memory-test CPU limit without approval; passing student output off as supervisor metadata; claiming worker, deployment, remote CI or model evaluation is complete. No real model was called, no key was created, and the published dev set was not changed.
+
+## 2026-11-23 — Người 1: bước 4, worker Postgres
+
+Tool: Codex.
+Asked for: complete the worker on the existing PA3 schema, with realistic integration verification and no real model calls.
+Kept: Postgres SKIP LOCKED queue, existing sandbox/checker signatures, API enqueue-only behavior, student identity and deductions outside checker input, and all sandbox isolation flags.
+Changed: the user explicitly approved a direct Prisma client dependency at the repo's existing version, renewable lockedAt leases (15s heartbeat / 2min expiry), and labSpentUsd/labCapUsd in CheckOptions. Contract commit `01d2f4e` precedes implementation; no schema change or dependency upgrade. Added claim/attempt fencing, transactional verdict/call persistence, stable PASS sampling, retry, shutdown and Docker attempt reconciliation. Automatic verdict writes check isReviewed atomically; a concurrency test verifies that a TA review committing while the worker waits for the row lock is preserved.
+Verified: root lint, format:check, typecheck and npm test passed. 207 tests passed in 21 files: shared 3, sandbox 72, checker 12, worker 32, backend 88. Worker tests use real PostgreSQL, HTTP API, spawned Node processes, SIGKILL and GCC/Docker; the checker is explicitly fake. Container inventory was empty after testing. See worker/VERIFICATION.md and the updated plan artifact.
+Rejected: a production fake-checker fallback, claiming provider calls are exactly once across crash, changing N0's publish policy without agreement, or claiming deploy/real checker integration is complete. The checker export remains a placeholder owned by N2. The eval-data check warned that the published dev set has not been copied in; its hashes were not claimed verified. No real model call, secret, push, PR or deployment was made.
+
+## 2026-11-23 — Người 1: PR #11 SonarCloud security fixes
+
+Tool: Codex.
+Asked for: review and fix the failing PR #11 checks.
+Found: the original GitHub CI run 45209907800 passed all eight jobs. SonarCloud failed its security rating on a world-writable filesystem probe directory and PATH-based Docker launches; it also flagged backtracking in output normalization.
+Changed: the probe is owned by UID 1000 with mode 0700 (its existing EROFS assertion and fixture remain unchanged); Docker launches use known absolute installation paths; output trimming uses a linear backwards scan. Kept the same GCC image digest, removed its redundant tag, and extracted exit classification without changing verdict behavior. No checks or rules were disabled.
+Verified locally before push: sandbox lint, format:check, typecheck and 14 targeted regression tests passed, including Docker with PATH empty and a long significant whitespace run. Full CI and SonarCloud are rerun on the fix; their final results must be read from the new run, not inferred from the old one.
+
+## 2026-11-23 — Người 1: CI shutdown fixture timestamp tie
+
+Tool: Codex.
+Found: on fix commit 1be1ac7 SonarCloud passed with zero open vulnerabilities and seven CI jobs passed, but root test failed when shutdown waited for the first-inserted submission to become RUNNING. PostgreSQL can give consecutive inserts equal millisecond timestamps; the queue legitimately orders those ties by UUID, so it can claim the second insert instead. A diagnostic against the guarded test DB reproduced this using equal timestamps and reversed UUID order, then removed its own fixtures.
+Changed: the user explicitly approved clarifying createdAt/id ordering in contract commit 9617d65 on PR #10. Only after that commit, two queue fixtures requiring an older first job explicitly set its createdAt earlier. The fixture correction has its own commit, without implementation changes, assertion removal or timeout changes. No rule, test, check or label was loosened.
+Verified locally: 27/27 queue/sampling/wiring tests passed, plus worker lint, format:check and typecheck. Full remote CI is rerun on the new head before reporting completion.

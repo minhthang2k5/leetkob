@@ -7,6 +7,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
     "lint": "eslint src tests --ext .ts",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
@@ -14,9 +15,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@leetkob/shared": "0.1.0",
+    "@leetkob/checker": "0.1.0",
     "@leetkob/sandbox": "0.1.0",
-    "@leetkob/checker": "0.1.0"
+    "@leetkob/shared": "0.1.0",
+    "@prisma/client": "^5.21.1"
   },
   "devDependencies": {
     "@types/node": "^20.17.6",
