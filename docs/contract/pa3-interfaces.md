@@ -29,8 +29,8 @@ Owners: **N0** = backend, API, DB, CI (Minh Thắng) · **N1** = sandbox, worker
 
 ```ts
 export interface Limits {
-  cpuSeconds: number;   // default 2
-  wallSeconds: number;  // default 5; past it the whole container is killed
+  cpuSeconds: number;   // default 2 per test execution (compilation budget is separate, rule 4)
+  wallSeconds: number;  // default 5 per test execution; past it the whole container is killed
   memoryMb: number;     // default 256; swap = memory (no extra swap)
   pids: number;         // default 64
   outputBytes: number;  // default 64 * 1024
@@ -57,7 +57,10 @@ Rules:
 1. A fault of the submission (wrong output, timeout, memory, crash, compile error) **returns** a `JudgeOutcome`; it never throws.
 2. `judge()` throws only when the infrastructure fails (for example the Docker daemon is down). The worker then retries.
 3. Stops at the first failing test. Output comparison ignores trailing spaces on each line and trailing empty lines.
-4. Compilation runs inside the sandbox too.
+4. Compilation runs inside the sandbox too, with a separate fixed budget of **10 CPU seconds and 20 wall seconds**.
+   `Limits.cpuSeconds` and `Limits.wallSeconds` apply to each execution of the student's program, not to the compiler.
+   The memory, swap, pids and output restrictions and all isolation flags still apply during compilation.
+   This avoids charging GCC's header parsing/linking against the student's 2-second runtime budget.
 5. `judge()` never receives an API key or any server environment variable.
 
 ### A.2 `checkSubmission()` — checker (owner N2)
@@ -87,6 +90,8 @@ export interface CheckOptions {
   modelOff: boolean;     // MODEL_OFF=1: hard rules only, semantic constraints become UNSURE, no network
   judge?: SemanticJudge; // required when modelOff is false
   timeoutMs?: number;    // default 30_000 per model call
+  labSpentUsd?: number;  // worker's sum of persisted ModelCall.costUsd for this lab
+  labCapUsd?: number;    // configured cap; checker decides whether to call the model
 }
 
 export interface CheckResult {
@@ -153,11 +158,17 @@ Rules:
 1. The queue is the `submissions` table in Postgres. The worker claims a job with `SELECT ... FOR UPDATE SKIP LOCKED`. No Redis.
 2. The job carries only `submissionId`. The worker reads code, tests and constraints from the DB. No code or secret in the job.
 3. Status: `QUEUED → RUNNING → JUDGED`, or `FAILED` after 3 attempts. Columns `attempts` and `lockedAt`.
-   A row `RUNNING` for more than 2 minutes is treated as a dead worker and goes back to `QUEUED`.
+   `lockedAt` is a renewable lease: the owner refreshes it every 15 seconds while working.
+   A row `RUNNING` with no refresh for more than 2 minutes is reclaimed as `QUEUED`, or `FAILED`
+   if it has already reached 3 attempts. Every refresh/result/failure write checks both status and
+   the claimed `attempts` value; an old attempt cannot overwrite a new owner.
 4. The submit endpoint only inserts a `QUEUED` row and returns `202`. **No judging inside the request handler.**
 5. Judged exactly once: `ConstraintVerdict` has `@@unique([submissionId, constraintId])` and the worker upserts.
 6. The worker samples 10% of `PASS` verdicts as `isSampled`, deterministically from a seed, so a re-run gives the same sample.
 7. The worker calls `checkSubmission()` only when `judge()` returned `ACCEPTED`.
+8. The worker passes `labSpentUsd` and `labCapUsd` in `CheckOptions`, never a lab or student identity.
+   Healthy attempts of one lab are processed serially so the next checker sees committed call costs;
+   other labs can be processed concurrently. Provider calls are not guaranteed exactly once across a crash.
 
 ---
 
@@ -338,6 +349,8 @@ Verdict = {
 | 2026-11-23 | v1 (clarification) | B.3: token format, stored as a hash, 12-hour expiry, login body limits, how the test accounts are created, PA#2 fixture tokens. No path, field or status changes. |
 | 2026-11-23 | v1 (clarification) | B.4/B.5: upper size limits, order of 400/404/403, who may submit, sliding submission window and `Retry-After`. No path, field or status changes. |
 | 2026-11-23 | v1 (clarification) | B.6: who may review, order of answers, which submissions the queue lists, review body rules, publish reads the new verdicts. No path, field or status changes. |
+| 2026-11-23 | v1 (clarification, user approved) | A.1: CPU/wall limits apply per test execution; compilation has a separate 10s CPU/20s wall budget with the same isolation and other resource restrictions. Real GCC compilation of valid submissions sometimes exceeded 2 CPU seconds. No interface or result enum changes. |
+| 2026-11-23 | v1 (additive and clarification, user approved) | A.2/A.4: worker supplies lab spend/cap values; lockedAt is a renewable lease with a 15s heartbeat, 2-minute expiry and attempt fencing. No schema change. |
 
 ## Decisions and sources
 
