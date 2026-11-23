@@ -29,9 +29,10 @@ async function firstLabOf(username: string) {
 }
 
 describe('mock API keeps the server rules the UI relies on', () => {
-  it('rejects a wrong password with UNAUTHORIZED', async () => {
+  // Contract B.2: a failed login is 401 invalid-credentials, not unauthorized.
+  it('rejects a wrong password with INVALID_CREDENTIALS', async () => {
     await expect(api.login('ta.a', 'wrong')).rejects.toMatchObject({
-      code: 'UNAUTHORIZED'
+      code: 'INVALID_CREDENTIALS'
     });
   });
 
@@ -110,11 +111,31 @@ describe('describeProblem', () => {
   it('says a failed login is a wrong username or password', () => {
     const err = new ApiError({
       type: 'x',
-      title: 'Unauthorized',
+      title: 'Invalid credentials',
       status: 401,
-      code: 'UNAUTHORIZED',
+      code: 'INVALID_CREDENTIALS',
       instance: '/v1/auth/login'
     });
     expect(describeProblem(err)).toBe('Sai tên đăng nhập hoặc mật khẩu.');
+  });
+
+  it('hides deductions from a student, like the server', async () => {
+    const { lab } = await firstLabOf('sv.an');
+    const seen = await api.getLab(lab.id);
+    expect(seen.tests).toEqual([]);
+    expect(seen.constraints.every((c) => !('deduction' in c))).toBe(true);
+  });
+
+  it('turns Retry-After into minutes for a 429', () => {
+    const err = new ApiError({
+      type: 'x',
+      title: 'Too many submissions',
+      status: 429,
+      code: 'RATE_LIMITED',
+      retryAfter: 125
+    });
+    expect(describeProblem(err)).toBe(
+      'Bạn đã nộp 5 lần trong 10 phút. Thử lại sau khoảng 3 phút.'
+    );
   });
 });

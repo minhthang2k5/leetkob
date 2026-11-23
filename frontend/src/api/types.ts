@@ -1,5 +1,5 @@
-// Shapes the UI expects from the backend. Kept in step with frontend/API.md;
-// once N2 freezes docs/contract/*.md, the contract wins and this file follows it.
+// Shapes the UI expects from the backend: docs/contract/pa3-interfaces.md, Part B.
+// If this file and the contract disagree, the contract wins and this file follows it.
 
 export type Role = 'ADMIN' | 'TA' | 'STUDENT';
 
@@ -43,7 +43,8 @@ export interface Constraint {
   id: string;
   code: string;
   text: string;
-  deduction: number;
+  /** Staff only: the server leaves it out for a student (contract B.4). */
+  deduction?: number;
   kind: ConstraintKind;
 }
 

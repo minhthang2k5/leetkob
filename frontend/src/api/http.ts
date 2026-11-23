@@ -49,7 +49,10 @@ export function createHttpApi(getToken: TokenSource, onUnauthorized: () => void)
     }
 
     if (!res.ok) {
-      const err = new ApiError(toProblem(res.status, data, `/v1${path}`));
+      const problem = toProblem(res.status, data, `/v1${path}`);
+      const retryAfter = Number(res.headers.get('Retry-After'));
+      if (Number.isFinite(retryAfter) && retryAfter > 0) problem.retryAfter = retryAfter;
+      const err = new ApiError(problem);
       if (err.status === 401 && path !== '/auth/login') onUnauthorized();
       throw err;
     }

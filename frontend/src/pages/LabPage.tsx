@@ -91,12 +91,13 @@ function ConstraintsAside({ lab, staff }: { lab: Lab; staff: boolean }) {
             <span className="constraint-code">{c.code}</span>
             <div>
               <p>{c.text}</p>
-              <p className="constraint-meta">
-                Trừ {c.deduction} điểm nếu vi phạm
-                {staff && (
-                  <>; {c.kind === 'BAN_LIST' ? 'luật cứng kiểm tra' : 'model đánh giá'}</>
-                )}
-              </p>
+              {/* Deductions reach staff only; the server never sends them to a student. */}
+              {staff && (
+                <p className="constraint-meta">
+                  Trừ {c.deduction} điểm nếu vi phạm;{' '}
+                  {c.kind === 'BAN_LIST' ? 'luật cứng kiểm tra' : 'model đánh giá'}
+                </p>
+              )}
             </div>
           </li>
         ))}
