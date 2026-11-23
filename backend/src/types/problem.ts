@@ -27,6 +27,12 @@ export const PROBLEM_TYPES = {
     code: 'UNAUTHORIZED',
     title: 'Unauthorized'
   },
+  INVALID_CREDENTIALS: {
+    slug: 'invalid-credentials',
+    status: 401,
+    code: 'INVALID_CREDENTIALS',
+    title: 'Invalid credentials'
+  },
   FORBIDDEN: {
     slug: 'forbidden',
     status: 403,

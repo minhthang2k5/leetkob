@@ -18,7 +18,8 @@
     "prisma:migrate": "prisma migrate dev",
     "db:migrate": "prisma migrate deploy",
     "db:test:setup": "node scripts/db-test-setup.js",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "db:seed:accounts": "tsx prisma/accounts.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

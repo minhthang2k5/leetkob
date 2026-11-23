@@ -67,11 +67,16 @@ enum ModelCallStatus {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  role      Role
-  token     String   @unique
-  createdAt DateTime @default(now())
+  id           String   @id @default(uuid())
+  name         String
+  role         Role
+  /// PA#2 fixture token, test database only. Deployed accounts have none and use sessions.
+  token        String?  @unique
+  /// Login name (contract B.3)
+  username     String?  @unique
+  /// "scrypt$N$r$p$salt$hash", never the password itself
+  passwordHash String?
+  createdAt    DateTime @default(now())
 
   // Classes where this user is assigned as TA
   assignedClasses  ClassTA[]
@@ -79,8 +84,23 @@ model User {
   enrollments      ClassStudent[]
   submissions      Submission[]
   reviewedVerdicts ConstraintVerdict[]
+  sessions         Session[]
 
   @@map("users")
+}
+
+/// A login. The client holds the random token; only its SHA-256 hash is stored here.
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
 }
 
 model Class {

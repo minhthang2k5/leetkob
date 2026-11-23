@@ -1,29 +1,48 @@
 import { PrismaClient, Role, LabStatus, ReviewVerdict } from '@prisma/client';
+import { hashPassword } from '../src/utils/password';
 
 const prisma = new PrismaClient();
+
+/**
+ * Test fixtures only (test database, local dev). The deployed test accounts come from
+ * prisma/accounts.ts, whose passwords are read from the environment.
+ * This password is a fixture, not a secret: it only ever exists in a throw-away database.
+ */
+export const FIXTURE_PASSWORD = 'fixture-password';
+
+// Hashing is deliberately slow; hash once per process, not on every test reset.
+let fixtureHash: Promise<string> | undefined;
+function fixturePasswordHash(): Promise<string> {
+  fixtureHash ??= hashPassword(FIXTURE_PASSWORD);
+  return fixtureHash;
+}
 
 export const SEED_DATA = {
   users: {
     admin: {
       id: '10000000-0000-0000-0000-000000000001',
+      username: 'fixture.admin',
       name: 'System Admin',
       role: Role.ADMIN,
       token: 'token-admin'
     },
     taClassA: {
       id: '10000000-0000-0000-0000-000000000002',
+      username: 'fixture.ta.a',
       name: 'TA Alice (Class A)',
       role: Role.TA,
       token: 'token-ta-class-a'
     },
     taClassB: {
       id: '10000000-0000-0000-0000-000000000003',
+      username: 'fixture.ta.b',
       name: 'TA Bob (Class B)',
       role: Role.TA,
       token: 'token-ta-class-b'
     },
     student: {
       id: '10000000-0000-0000-0000-000000000004',
+      username: 'fixture.student',
       name: 'Student Charlie',
       role: Role.STUDENT,
       token: 'token-student'
@@ -96,8 +115,9 @@ export async function seedDatabase(client: PrismaClient = prisma) {
   await client.user.deleteMany();
 
   // 1. Seed Users
+  const passwordHash = await fixturePasswordHash();
   await client.user.createMany({
-    data: Object.values(SEED_DATA.users)
+    data: Object.values(SEED_DATA.users).map((u) => ({ ...u, passwordHash }))
   });
 
   // 2. Seed Classes
@@ -111,6 +131,11 @@ export async function seedDatabase(client: PrismaClient = prisma) {
       { classId: SEED_DATA.classes.classA.id, userId: SEED_DATA.users.taClassA.id },
       { classId: SEED_DATA.classes.classB.id, userId: SEED_DATA.users.taClassB.id }
     ]
+  });
+
+  // The fixture student is enrolled in class A (contract B.3: students see their classes)
+  await client.classStudent.create({
+    data: { classId: SEED_DATA.classes.classA.id, userId: SEED_DATA.users.student.id }
   });
 
   // 4. Seed Labs
@@ -181,6 +206,14 @@ export async function seedDatabase(client: PrismaClient = prisma) {
 }
 
 if (require.main === module) {
+  // Fixture users have fixed tokens and a known password: never in a deployment.
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[Seed] Refusing to load test fixtures when NODE_ENV=production.');
+    console.error(
+      '[Seed] Use `npm run db:seed:accounts` for the deployed test accounts.'
+    );
+    process.exit(1);
+  }
   seedDatabase()
     .catch((err) => {
       console.error('[Seed Error]:', err);
@@ -190,4 +223,3 @@ if (require.main === module) {
       await prisma.$disconnect();
     });
 }
-
