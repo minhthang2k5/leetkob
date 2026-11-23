@@ -50,12 +50,12 @@ export const SEED_DATA = {
   },
   classes: {
     classA: {
-      id: '20000000-0000-0000-0000-000000000001',
+      id: '20000000-0000-4000-8000-000000000001',
       code: 'CSC13114-A',
       name: 'Sorting Lab Class A'
     },
     classB: {
-      id: '20000000-0000-0000-0000-000000000002',
+      id: '20000000-0000-4000-8000-000000000002',
       code: 'CSC13114-B',
       name: 'Sorting Lab Class B'
     }
