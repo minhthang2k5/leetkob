@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type { JudgeResult, Limits } from '@leetkob/shared';
 import { sandboxScope } from './context';
 
@@ -13,6 +16,26 @@ export class SandboxInfrastructureError extends Error {
     super(message);
     this.name = 'SandboxInfrastructureError';
   }
+}
+
+/** Resolve only known installation paths; never search the caller's PATH. */
+export function dockerExecutable(): string {
+  const candidates =
+    process.platform === 'win32'
+      ? [
+          'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe',
+          join(homedir(), 'AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe')
+        ]
+      : [
+          '/usr/bin/docker',
+          '/usr/local/bin/docker',
+          '/opt/homebrew/bin/docker',
+          '/snap/bin/docker'
+        ];
+  const executable = candidates.find((path) => existsSync(path));
+  if (!executable)
+    throw new SandboxInfrastructureError('Docker executable is unavailable');
+  return executable;
 }
 
 export function containerArguments(
@@ -69,7 +92,7 @@ export function containerArguments(
 /** Bounded control-plane output; never include raw Docker diagnostics in errors. */
 export async function dockerCommand(args: string[], timeoutMs = 15_000): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('docker', args, {
+    const child = spawn(dockerExecutable(), args, {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -103,6 +126,22 @@ export interface ContainerOutcome {
   result: JudgeResult;
   stdout: Buffer;
   stderr: Buffer;
+}
+
+function classifyExit(
+  mode: 'compile' | 'run',
+  outputExceeded: boolean,
+  wallExpired: boolean,
+  state: { OOMKilled: boolean; ExitCode: number }
+): JudgeResult {
+  if (outputExceeded) return mode === 'compile' ? 'COMPILE_ERROR' : 'OUTPUT_LIMIT';
+  if (wallExpired) return 'TIME_LIMIT';
+  if (state.OOMKilled || state.ExitCode === 12) return 'MEMORY_LIMIT';
+  if (state.ExitCode === 11) return 'TIME_LIMIT';
+  if (state.ExitCode === 10) return 'COMPILE_ERROR';
+  if (state.ExitCode === 13 || state.ExitCode >= 128) return 'RUNTIME_ERROR';
+  if (state.ExitCode === 0) return 'ACCEPTED';
+  throw new SandboxInfrastructureError('Trusted sandbox runner failed');
 }
 
 export async function runContainer(
@@ -151,10 +190,14 @@ export async function runContainer(
       void killPromise.catch(() => {});
     };
     await new Promise<void>((resolve, reject) => {
-      const child = spawn('docker', ['start', '--attach', '--interactive', name], {
-        windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
+      const child = spawn(
+        dockerExecutable(),
+        ['start', '--attach', '--interactive', name],
+        {
+          windowsHide: true,
+          stdio: ['pipe', 'pipe', 'pipe']
+        }
+      );
       const timer = setTimeout(() => {
         wallExpired = true;
         kill();
@@ -230,15 +273,7 @@ export async function runContainer(
     };
     if (state.Running || state.Error || state.Status !== 'exited')
       throw new SandboxInfrastructureError('Container execution failed');
-    let result: JudgeResult;
-    if (outputExceeded) result = mode === 'compile' ? 'COMPILE_ERROR' : 'OUTPUT_LIMIT';
-    else if (wallExpired) result = 'TIME_LIMIT';
-    else if (state.OOMKilled || state.ExitCode === 12) result = 'MEMORY_LIMIT';
-    else if (state.ExitCode === 11) result = 'TIME_LIMIT';
-    else if (state.ExitCode === 10) result = 'COMPILE_ERROR';
-    else if (state.ExitCode === 13 || state.ExitCode >= 128) result = 'RUNTIME_ERROR';
-    else if (state.ExitCode === 0) result = 'ACCEPTED';
-    else throw new SandboxInfrastructureError('Trusted sandbox runner failed');
+    const result = classifyExit(mode, outputExceeded, wallExpired, state);
     return { result, stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) };
   } finally {
     scope?.signal.removeEventListener('abort', abort);

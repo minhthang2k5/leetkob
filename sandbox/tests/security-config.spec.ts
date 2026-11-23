@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LIMITS } from '../src';
-import { containerArguments } from '../src/docker';
+import { containerArguments, dockerCommand, dockerExecutable } from '../src/docker';
+import { isAbsolute } from 'node:path';
 
 describe('sandbox launch policy', () => {
+  it('uses an absolute Docker executable even when PATH has no Docker', async () => {
+    const saved = process.env.PATH;
+    process.env.PATH = '';
+    try {
+      expect(isAbsolute(dockerExecutable())).toBe(true);
+      expect(await dockerCommand(['version', '--format', '{{.Server.Version}}'])).toMatch(
+        /^\d+\.\d+/
+      );
+    } finally {
+      if (saved === undefined) delete process.env.PATH;
+      else process.env.PATH = saved;
+    }
+  });
   it.each(['compile', 'run'] as const)('isolates the %s phase', (mode) => {
     const args = containerArguments('test-container', DEFAULT_LIMITS, mode);
     for (const [flag, value] of [

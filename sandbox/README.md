@@ -24,6 +24,8 @@ docker build -t leetkob-sandbox:pa3 sandbox
 
 Runtime callers must build/provision this image first. An absent image or unreachable daemon raises `SandboxInfrastructureError`, allowing the worker to retry. Compilation errors, wrong answers and resource violations return `JudgeOutcome` instead.
 
+Docker is resolved from fixed installation paths, never from `PATH`: `/usr/bin/docker`, `/usr/local/bin/docker`, `/opt/homebrew/bin/docker` or `/snap/bin/docker` on Unix; the standard system-wide Docker Desktop or per-user `AppData/Local/Programs/DockerDesktop` installation on Windows. Other installation layouts require an explicit code/configuration decision before deployment. The filesystem probe directory belongs to UID 1000 with mode 0700, so its EROFS check still proves the read-only mount rather than a Unix permission denial.
+
 ## Execution and boundaries
 
 Compilation happens inside a container. Only the executable bytes leave it; every test receives a fresh container and scratch filesystem. Expected outputs stay in Node. The immutable C supervisor receives a length-framed source/executable through stdin, gives remaining stdin to the submitted program and classifies its actual process status. Student output is never parsed as trusted judge metadata, and a student exiting with a reserved supervisor code is still a runtime error.

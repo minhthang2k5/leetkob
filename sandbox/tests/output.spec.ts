@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { outputsEqual } from '../src/output';
 
 describe('contract A.1 output comparison', () => {
+  it('preserves a long internal whitespace run at the output byte boundary', () => {
+    const prefix = ' '.repeat(65530);
+    expect(outputsEqual(`${prefix}x\t \n`, `${prefix}x\n`)).toBe(true);
+    expect(outputsEqual(`${prefix}x\n`, 'x\n')).toBe(false);
+  });
   it.each([
     ['1 2   \n\n', '1 2\n', true],
     ['1\t\n2 \n', '1\n2', true],
