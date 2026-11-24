@@ -13,6 +13,17 @@ import { applyGuardrails } from './guardrail';
 import { evaluateHardRules } from './hard-rules';
 import { splitLines, stripCommentsKeepLines } from './preprocess';
 
+export {
+  AnthropicJudge,
+  buildAnonymizedPrompt,
+  calculateCostUsd,
+  DEFAULT_ANTHROPIC_MODEL
+} from './anthropic-judge';
+export type {
+  AnthropicClientLike,
+  AnthropicJudgeOptions,
+  AnthropicMessagesResponse
+} from './anthropic-judge';
 export { bannedNames, classifyConstraint } from './classify';
 export { DEFAULT_LAB_COST_CAP_USD } from './cost-cap';
 export { FakeJudge } from './fake-judge';
