@@ -264,5 +264,57 @@ describe('AST hard rules (trap cases & positive violations)', () => {
       expect(vecVerdict.verdict).toBe('VIOLATION');
       expect(vecVerdict.evidence).toEqual([{ line: 6, text: 'vector<int> vals;' }]);
     });
+
+    it('catches banned loop keywords like for and while', async () => {
+      const code = [
+        'int main() {',
+        '  int s = 0;',
+        '  for (int i = 0; i < 3; ++i) s += i;',
+        '  while (s > 0) { --s; }',
+        '  return s;',
+        '}'
+      ].join('\n');
+
+      const verdict = await checkHardRule(
+        makeConstraint('Do not use `for` or `while`.'),
+        code
+      );
+      expect(verdict.verdict).toBe('VIOLATION');
+      expect(verdict.evidence.map((e) => e.line)).toEqual([3, 4]);
+    });
+
+    it('catches banned member methods like rbegin', async () => {
+      const code = [
+        '#include <vector>',
+        'int main() {',
+        '  std::vector<int> v = {1, 2};',
+        '  auto it = v.rbegin();',
+        '  return *it;',
+        '}'
+      ].join('\n');
+
+      const verdict = await checkHardRule(makeConstraint('Do not call `rbegin`.'), code);
+      expect(verdict.verdict).toBe('VIOLATION');
+      expect(verdict.evidence).toEqual([{ line: 4, text: 'auto it = v.rbegin();' }]);
+    });
+
+    it('catches #define macro aliases to banned functions', async () => {
+      const code = [
+        '#include <algorithm>',
+        '#define sneaky std::sort',
+        'int main() {',
+        '  int a[2] = {2, 1};',
+        '  sneaky(a, a + 2);',
+        '  return 0;',
+        '}'
+      ].join('\n');
+
+      const verdict = await checkHardRule(
+        makeConstraint('Do not use `std::sort`.'),
+        code
+      );
+      expect(verdict.verdict).toBe('VIOLATION');
+      expect(verdict.evidence).toEqual([{ line: 5, text: 'sneaky(a, a + 2);' }]);
+    });
   });
 });

@@ -35,12 +35,20 @@ function parseBanTarget(name: string): ParsedBanTarget {
   return { raw: name, namespacePrefix: ns || null, identifier: ident };
 }
 
+const KEYWORD_NODE_MAP: Record<string, string[]> = {
+  for: ['for_statement', 'for_range_loop'],
+  while: ['while_statement'],
+  do: ['do_statement'],
+  goto: ['goto_statement']
+};
+
 interface FileContext {
   stdAliases: Set<string>;
   usingNamespaceStd: boolean;
   usingStdDecls: Set<string>;
   userDefinedFunctions: Set<string>;
   userDefinedTypes: Set<string>;
+  macroAliases: Map<string, string>;
 }
 
 function extractDeclaratorName(node: SyntaxNode | null): string | null {
@@ -99,9 +107,16 @@ function collectFileContext(root: SyntaxNode): FileContext {
   const usingStdDecls = new Set<string>();
   const userDefinedFunctions = new Set<string>();
   const userDefinedTypes = new Set<string>();
+  const macroAliases = new Map<string, string>();
 
   walk(root, (node) => {
-    if (node.type === 'namespace_alias_definition') {
+    if (node.type === 'preproc_def' || node.type === 'preproc_function_def') {
+      const nameNode = node.childForFieldName('name');
+      const valueNode = node.childForFieldName('value');
+      if (nameNode && valueNode) {
+        macroAliases.set(nameNode.text, valueNode.text);
+      }
+    } else if (node.type === 'namespace_alias_definition') {
       const nameNode = node.childForFieldName('name');
       // Target namespace is the last named child (after '=').
       const targetNode = node.namedChildren[node.namedChildren.length - 1];
@@ -149,8 +164,34 @@ function collectFileContext(root: SyntaxNode): FileContext {
     usingNamespaceStd,
     usingStdDecls,
     userDefinedFunctions,
-    userDefinedTypes
+    userDefinedTypes,
+    macroAliases
   };
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function macroExpandsToTarget(
+  macroBody: string,
+  target: ParsedBanTarget,
+  ctx: FileContext
+): boolean {
+  const identRe = new RegExp(`\\b${escapeRegExp(target.identifier)}\\b`);
+  if (!identRe.test(macroBody)) return false;
+  if (target.namespacePrefix === 'std') {
+    const stdPattern = [...ctx.stdAliases].map(escapeRegExp).join('|');
+    const qualifiedRe = new RegExp(
+      `\\b(?:${stdPattern})\\s*::\\s*${escapeRegExp(target.identifier)}\\b`
+    );
+    return (
+      qualifiedRe.test(macroBody) ||
+      ctx.usingNamespaceStd ||
+      ctx.usingStdDecls.has(target.identifier)
+    );
+  }
+  return true;
 }
 
 function findViolationsInAst(
@@ -168,6 +209,32 @@ function findViolationsInAst(
   };
 
   walk(root, (node) => {
+    // 0. Banned C++ control-flow keywords (`for`, `while`, `do`, `goto`)
+    for (const target of targets) {
+      if (target.namespacePrefix === null) {
+        const mappedTypes = KEYWORD_NODE_MAP[target.identifier];
+        if (mappedTypes?.includes(node.type)) {
+          record(node, target);
+        }
+      }
+    }
+
+    // 0b. Macro alias invocation (`#define my_sort std::sort` -> `my_sort(...)`)
+    if (
+      node.type === 'identifier' &&
+      node.parent?.type !== 'preproc_def' &&
+      node.parent?.type !== 'preproc_function_def'
+    ) {
+      const macroBody = ctx.macroAliases.get(node.text);
+      if (macroBody) {
+        for (const target of targets) {
+          if (macroExpandsToTarget(macroBody, target, ctx)) {
+            record(node, target);
+          }
+        }
+      }
+    }
+
     // 1. Qualified identifiers like `std::sort`, `s::sort`, `std::map`
     if (node.type === 'qualified_identifier' && !isInsideUsingDeclaration(node)) {
       const parts = getQualifiedParts(node);
@@ -185,11 +252,23 @@ function findViolationsInAst(
       return;
     }
 
-    // 2. Unqualified calls: `sort(...)` or `qsort(...)`
+    // 2. Unqualified calls: `sort(...)`, `qsort(...)`, or banned member calls like `.rbegin()`
     if (node.type === 'call_expression') {
       const fnNode = node.childForFieldName('function');
       if (!fnNode) return;
-      // Ignore member calls like `obj.sort()` or `ptr->sort()` and qualified calls (handled above).
+      if (fnNode.type === 'field_expression') {
+        const fieldNode = fnNode.childForFieldName('field');
+        const fieldName = fieldNode?.text;
+        if (fieldName) {
+          for (const target of targets) {
+            if (target.namespacePrefix === null && fieldName === target.identifier) {
+              record(node, target);
+            }
+          }
+        }
+        return;
+      }
+      // Ignore qualified calls (handled above).
       if (fnNode.type === 'identifier' || fnNode.type === 'template_function') {
         const fnName =
           fnNode.type === 'template_function'
