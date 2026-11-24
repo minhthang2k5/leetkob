@@ -1,0 +1,12 @@
+[
+  {
+    "id": "C1",
+    "text": "Do not use `std::sort` or `std::stable_sort`.",
+    "deduction": 3
+  },
+  {
+    "id": "C2",
+    "text": "Implement in-place insertion sort without using an auxiliary array.",
+    "deduction": 3
+  }
+]
