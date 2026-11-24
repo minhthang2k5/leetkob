@@ -5,6 +5,9 @@
   "description": "Constraint checker: hard rules, model adapter, guardrails, CLI (owner N2)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "leetkob-checker": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "source": "./src/index.ts",
