@@ -9,6 +9,7 @@ import type {
 import { classifyConstraint } from './classify';
 import { costCapUnsureVerdicts, isLabCostCapReached } from './cost-cap';
 import { FakeJudge } from './fake-judge';
+import { GeminiJudge } from './gemini-judge';
 import { applyGuardrails } from './guardrail';
 import { evaluateHardRules } from './hard-rules';
 import { splitLines, stripCommentsKeepLines } from './preprocess';
@@ -24,6 +25,12 @@ export type {
   AnthropicJudgeOptions,
   AnthropicMessagesResponse
 } from './anthropic-judge';
+export {
+  calculateGeminiCostUsd,
+  DEFAULT_GEMINI_MODEL,
+  GeminiJudge
+} from './gemini-judge';
+export type { FetchLike, GeminiApiResponse, GeminiJudgeOptions } from './gemini-judge';
 export { bannedNames, classifyConstraint } from './classify';
 export { DEFAULT_LAB_COST_CAP_USD } from './cost-cap';
 export { FakeJudge } from './fake-judge';
@@ -127,7 +134,12 @@ export async function checkSubmission(
       let semanticVerdicts: CheckVerdict[];
       if (raced.timedOut) {
         const timeoutCall: ModelCallLog = {
-          provider: opts.judge instanceof FakeJudge ? 'fake' : 'anthropic',
+          provider:
+            opts.judge instanceof FakeJudge
+              ? 'fake'
+              : opts.judge instanceof GeminiJudge
+                ? 'gemini'
+                : 'anthropic',
           model: 'unknown',
           requestId: null,
           inputTokens: 0,
