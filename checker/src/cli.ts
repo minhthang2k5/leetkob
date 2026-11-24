@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join, resolve } from 'node:path';
 import type { CheckConstraint, ModelCallLog, SemanticJudge } from '@leetkob/shared';
 import { AnthropicJudge } from './anthropic-judge';
+import { GeminiJudge } from './gemini-judge';
 import { checkSubmission } from './index';
 
 interface DatasetConstraint {
@@ -15,8 +16,10 @@ export interface CliOptions {
   datasetDir: string;
   outPath: string;
   callsOutPath?: string;
+  provider?: 'anthropic' | 'gemini';
   modelOff: boolean;
   timeoutMs?: number;
+  delayMs?: number;
   judge?: SemanticJudge;
 }
 
@@ -27,12 +30,47 @@ export interface PredictionRecord {
   evidence: Array<{ line: number; text: string }>;
 }
 
+export function loadEnvFile(envPath: string): void {
+  if (!existsSync(envPath)) return;
+  const content = readFileSync(envPath, 'utf8');
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let val = line.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (key && val && process.env[key] === undefined) {
+      process.env[key] = val;
+    }
+  }
+}
+
+function loadDefaultEnvFiles(): void {
+  const candidates = [
+    resolve(__dirname, '../.env'),
+    resolve(process.cwd(), 'checker/.env'),
+    resolve(process.cwd(), '.env')
+  ];
+  for (const p of candidates) {
+    loadEnvFile(p);
+  }
+}
+
 export function parseCliArgs(argv: string[]): CliOptions {
   let datasetDir: string | undefined;
   let outPath: string | undefined;
   let callsOutPath: string | undefined;
+  let provider: 'anthropic' | 'gemini' | undefined;
   let modelOff = process.env.MODEL_OFF === '1';
   let timeoutMs: number | undefined;
+  let delayMs: number | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -42,8 +80,16 @@ export function parseCliArgs(argv: string[]): CliOptions {
       datasetDir = argv[++i];
     } else if (arg === '--calls-out') {
       callsOutPath = argv[++i];
+    } else if (arg === '--provider') {
+      const p = argv[++i];
+      if (p !== 'anthropic' && p !== 'gemini') {
+        throw new Error(`Unsupported provider: ${p}`);
+      }
+      provider = p;
     } else if (arg === '--timeout-ms') {
       timeoutMs = Number(argv[++i]);
+    } else if (arg === '--delay-ms') {
+      delayMs = Number(argv[++i]);
     } else if (arg === '--model-off') {
       modelOff = true;
     } else if (!arg.startsWith('-') && !datasetDir) {
@@ -55,11 +101,11 @@ export function parseCliArgs(argv: string[]): CliOptions {
 
   if (!datasetDir || !outPath) {
     throw new Error(
-      'Usage: leetcob-checker <dataset_dir> --out <predictions.jsonl> [--calls-out <calls.jsonl>] [--model-off]'
+      'Usage: leetcob-checker <dataset_dir> --out <predictions.jsonl> [--calls-out <calls.jsonl>] [--provider anthropic|gemini] [--delay-ms <ms>] [--model-off]'
     );
   }
 
-  return { datasetDir, outPath, callsOutPath, modelOff, timeoutMs };
+  return { datasetDir, outPath, callsOutPath, provider, modelOff, timeoutMs, delayMs };
 }
 
 export async function runCli(opts: CliOptions): Promise<{
@@ -74,7 +120,20 @@ export async function runCli(opts: CliOptions): Promise<{
     throw new Error(`Invalid dataset directory: ${root}`);
   }
 
-  const judge = opts.modelOff ? undefined : (opts.judge ?? new AnthropicJudge());
+  const useGemini =
+    opts.provider === 'gemini' ||
+    (!opts.provider &&
+      Boolean(process.env.GEMINI_API_KEY) &&
+      !process.env.ANTHROPIC_API_KEY);
+
+  const judge = opts.modelOff
+    ? undefined
+    : (opts.judge ??
+      (useGemini
+        ? new GeminiJudge({ maxRetries: 3, retryDelayMs: 15_000 })
+        : new AnthropicJudge()));
+  const delayMs = opts.delayMs ?? (useGemini && !opts.modelOff ? 6500 : 0);
+  const timeoutMs = opts.timeoutMs ?? (useGemini ? 120_000 : undefined);
   const problemIds = readdirSync(problemsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name)
@@ -110,14 +169,30 @@ export async function runCli(opts: CliOptions): Promise<{
     for (const file of cppFiles) {
       const solutionId = `${pid}/${file.replace(/\.cpp$/, '')}`;
       const code = readFileSync(join(solProblemDir, file), 'utf8');
+      const isDirectCli = process.env.NODE_ENV !== 'test' && require.main === module;
+      if (isDirectCli) {
+        process.stdout.write(`${solutionId} ... `);
+      }
       const result = await checkSubmission(
         { statement, constraints, code },
         {
           modelOff: opts.modelOff,
           judge,
-          timeoutMs: opts.timeoutMs
+          timeoutMs
         }
       );
+
+      if (isDirectCli) {
+        const callInfo =
+          result.calls.length > 0
+            ? `${result.calls[0].provider}:${result.calls[0].model} ${result.calls[0].status} (${result.calls[0].ms}ms)`
+            : 'HARD_RULE_ONLY';
+        console.log(callInfo);
+      }
+
+      if (result.calls.length > 0 && delayMs > 0) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
 
       for (const v of result.verdicts) {
         predictions.push({
@@ -150,6 +225,7 @@ export async function runCli(opts: CliOptions): Promise<{
 }
 
 async function main(): Promise<void> {
+  loadDefaultEnvFiles();
   const opts = parseCliArgs(process.argv.slice(2));
   const { predictions, calls } = await runCli(opts);
   const totalCost = calls.reduce((sum, c) => sum + c.costUsd, 0);

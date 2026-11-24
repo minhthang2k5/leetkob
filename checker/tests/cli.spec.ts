@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { parseCliArgs, runCli } from '../src/cli';
+import { loadEnvFile, parseCliArgs, runCli } from '../src/cli';
 
 const tempDirs: string[] = [];
 
@@ -79,5 +79,26 @@ describe('checker CLI', () => {
       verdict: 'unsure',
       evidence: []
     });
+  });
+
+  it('loads .env variables without overriding existing process.env values', () => {
+    const base = mkdtempSync(join(tmpdir(), 'leetkob-env-'));
+    tempDirs.push(base);
+    const envPath = join(base, '.env');
+    writeFileSync(
+      envPath,
+      '# comment\nTEST_CHECKER_A="hello"\nTEST_CHECKER_B=world\n',
+      'utf8'
+    );
+
+    process.env.TEST_CHECKER_B = 'existing';
+    try {
+      loadEnvFile(envPath);
+      expect(process.env.TEST_CHECKER_A).toBe('hello');
+      expect(process.env.TEST_CHECKER_B).toBe('existing');
+    } finally {
+      delete process.env.TEST_CHECKER_A;
+      delete process.env.TEST_CHECKER_B;
+    }
   });
 });
