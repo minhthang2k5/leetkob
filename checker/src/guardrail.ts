@@ -101,6 +101,10 @@ function verifyEvidenceLines(
  * 1. Timeout / API error -> UNSURE (GUARDRAIL)
  * 2. Schema validation -> UNSURE (GUARDRAIL, "schema invalid")
  * 3. Exact 1-based evidence line check against original submitted code
+ *
+ * Nguyên tắc nghiệp vụ: Phạt nhầm sinh viên (wrongful deduction) là lỗi nặng nhất.
+ * Nếu model trả kết quả không đáng tin cậy ở bất kỳ bước nào, chuyển về `UNSURE`
+ * để đẩy lên hàng đợi cho TA duyệt tay (Human Gate).
  */
 export function applyGuardrails(
   constraints: CheckConstraint[],
@@ -108,6 +112,7 @@ export function applyGuardrails(
   call: ModelCallLog,
   originalLines: string[]
 ): CheckVerdict[] {
+  // 1. Mạng lỗi hoặc quá timeout -> không đoán bừa, ép toàn bộ sang UNSURE.
   if (call.status === 'TIMEOUT') {
     return constraints.map((c) => guardrailUnsure(c, 'timeout'));
   }
@@ -115,6 +120,7 @@ export function applyGuardrails(
     return constraints.map((c) => guardrailUnsure(c, 'api error'));
   }
 
+  // 2. Kiểm tra cấu trúc JSON trả về có đúng schema hợp đồng hay không.
   const parsed = parseRawVerdicts(raw);
   if (!parsed) {
     return constraints.map((c) => guardrailUnsure(c, 'schema invalid'));
@@ -126,6 +132,8 @@ export function applyGuardrails(
       return guardrailUnsure(constraint, 'schema invalid');
     }
 
+    // 3. Chống AI "bịa" dòng code (hallucination): từng dòng `evidence` phải
+    // tồn tại và khớp nguyên văn (sau khi trim) với bài nộp gốc của sinh viên.
     const mismatchReason = verifyEvidenceLines(item.evidence, originalLines);
     if (mismatchReason) {
       return guardrailUnsure(constraint, mismatchReason);

@@ -87,9 +87,15 @@ export async function checkSubmission(
   input: CheckInput,
   opts: ExtendedCheckOptions
 ): Promise<CheckResult> {
+  // Tầng 1 (Tiền xử lý): Xóa comment để vừa ẩn danh (tránh lộ tên/MSSV), vừa chặn
+  // prompt injection trong comment, đồng thời giữ nguyên số dòng 1-based.
   const strippedCode = stripCommentsKeepLines(input.code);
+  // Tách code gốc theo từng dòng để lát nữa đối chiếu `evidence` (phải khớp bài nộp gốc).
   const originalLines = splitLines(input.code);
 
+  // Tầng 2 (Phân loại): Tách ràng buộc thành 2 nhóm:
+  // - BAN_LIST ("Do not use/call `...`"): kiểm tra bằng AST (miễn phí, chính xác 100%).
+  // - SEMANTIC (ràng buộc thuật toán/ngữ nghĩa): chỉ gửi model nếu thực sự cần.
   const banConstraints: CheckConstraint[] = [];
   const semanticConstraints: CheckConstraint[] = [];
 
@@ -101,6 +107,7 @@ export async function checkSubmission(
     }
   }
 
+  // Chạy Hard Rules trước cho toàn bộ BAN_LIST (chỉ parse AST C++ đúng 1 lần).
   const verdictById = new Map<string, CheckVerdict>();
   const hardVerdicts = await evaluateHardRules(banConstraints, input.code, strippedCode);
   for (const v of hardVerdicts) {
@@ -109,12 +116,16 @@ export async function checkSubmission(
 
   const calls: ModelCallLog[] = [];
 
+  // Tầng 3 (Model + Guardrail): Chỉ gọi AI khi còn ít nhất 1 ràng buộc SEMANTIC.
+  // Nếu bài chỉ có BAN_LIST -> trả kết quả ngay, không tốn tiền gọi model.
   if (semanticConstraints.length > 0) {
     if (opts.modelOff) {
+      // Chế độ offline (CI / test không mạng): mọi ràng buộc SEMANTIC -> UNSURE để TA tự duyệt.
       for (const v of modelOffUnsureVerdicts(semanticConstraints)) {
         verdictById.set(v.constraintId, v);
       }
     } else if (isLabCostCapReached(opts.labSpentUsd, opts.labCapUsd)) {
+      // Đã chạm trần chi phí của lab (mặc định $3) -> ngừng gọi model để tránh đội ngân sách.
       for (const v of costCapUnsureVerdicts(semanticConstraints)) {
         verdictById.set(v.constraintId, v);
       }
@@ -123,6 +134,7 @@ export async function checkSubmission(
         throw new Error('SemanticJudge is required when modelOff is false');
       }
       const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+      // Gom tất cả ràng buộc SEMANTIC vào ĐÚNG 1 lần gọi model/bài (kèm code đã xóa comment).
       const req = {
         statement: input.statement,
         constraints: semanticConstraints,
@@ -133,6 +145,7 @@ export async function checkSubmission(
 
       let semanticVerdicts: CheckVerdict[];
       if (raced.timedOut) {
+        // Quá thời gian chờ -> tạo log TIMEOUT rồi qua guardrail ép toàn bộ sang UNSURE.
         const timeoutCall: ModelCallLog = {
           provider:
             opts.judge instanceof FakeJudge
@@ -157,6 +170,7 @@ export async function checkSubmission(
           originalLines
         );
       } else {
+        // Không tin kết quả thô từ AI: luôn đưa qua `applyGuardrails` kiểm tra schema + khớp dòng.
         const { raw, call } = raced.value;
         calls.push(call);
         semanticVerdicts = applyGuardrails(semanticConstraints, raw, call, originalLines);
@@ -168,6 +182,7 @@ export async function checkSubmission(
     }
   }
 
+  // Ghép kết quả theo ĐÚNG thứ tự `input.constraints` ban đầu (hợp đồng A.2).
   const verdicts = input.constraints.map((c) => {
     const v = verdictById.get(c.id);
     if (!v) {

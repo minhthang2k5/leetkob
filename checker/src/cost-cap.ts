@@ -3,6 +3,10 @@ import type { CheckConstraint, CheckVerdict } from '@leetkob/shared';
 /** Default per-lab spend cap in USD (brief, section 3; contract A.3 rule 4). */
 export const DEFAULT_LAB_COST_CAP_USD = 3.0;
 
+/**
+ * Kiểm tra tổng chi phí đã dùng của cả lab (do worker cộng dồn từ DB) có chạm trần chưa.
+ * Giúp ngăn một lab 80+ sinh viên bị lỗi lặp làm tốn quá ngân sách.
+ */
 export function isLabCostCapReached(
   labSpentUsd: number | undefined,
   labCapUsd: number | undefined

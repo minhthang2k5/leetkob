@@ -120,6 +120,8 @@ export async function runCli(opts: CliOptions): Promise<{
     throw new Error(`Invalid dataset directory: ${root}`);
   }
 
+  // Mặc định ưu tiên Gemini nếu có GEMINI_API_KEY (và không truyền --provider anthropic).
+  // Với Gemini Free Tier, tự động thêm delay giữa các bài để tránh lỗi 429 rate-limit.
   const useGemini =
     opts.provider === 'gemini' ||
     (!opts.provider &&
@@ -194,6 +196,8 @@ export async function runCli(opts: CliOptions): Promise<{
         await new Promise((r) => setTimeout(r, delayMs));
       }
 
+      // Chuyển verdict sang chữ thường ("pass" | "violation" | "unsure") vì `eval.mjs`
+      // yêu cầu chữ thường (khác với DB/API dùng chữ HOA).
       for (const v of result.verdicts) {
         predictions.push({
           solution: solutionId,

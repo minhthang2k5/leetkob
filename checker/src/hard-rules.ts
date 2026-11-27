@@ -337,6 +337,14 @@ function findViolationsInAst(
 
 /**
  * Evaluates a batch of `BAN_LIST` constraints against C++ source code using one AST parse.
+ *
+ * Quy trình 3 bước của Hard Rule:
+ * 1. Parse C++ thành cây cú pháp AST trên code đã xóa comment (chỉ parse 1 lần/bài).
+ * 2. Thu thập ngữ cảnh file (`collectFileContext`): `using namespace std`, `using std::...`,
+ *    alias `namespace s = std`, macro `#define`, và danh sách hàm/type do sinh viên tự viết
+ *    (để KHÔNG bắt nhầm các ca bẫy như `void sort(...)` tự cài).
+ * 3. Duyệt AST (`findViolationsInAst`) đối chiếu với danh sách tên bị cấm trong backtick;
+ *    trích số dòng 1-based và nội dung từ `originalCode`.
  */
 export async function evaluateHardRules(
   constraints: CheckConstraint[],
