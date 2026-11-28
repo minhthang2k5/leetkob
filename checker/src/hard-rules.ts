@@ -23,7 +23,8 @@ interface ParsedBanTarget {
 }
 
 function parseBanTarget(name: string): ParsedBanTarget {
-  const cleaned = name.replace(/\(.*\)$/, '').trim();
+  const parenIdx = name.indexOf('(');
+  const cleaned = (parenIdx === -1 ? name : name.slice(0, parenIdx)).trim();
   const idx = cleaned.lastIndexOf('::');
   if (idx === -1) {
     return { raw: name, namespacePrefix: null, identifier: cleaned };
@@ -268,6 +269,37 @@ function checkQualifiedNode(
   }
 }
 
+function matchesUnqualifiedTarget(
+  name: string,
+  target: ParsedBanTarget,
+  userDefined: Set<string>,
+  ctx: FileContext
+): boolean {
+  if (name !== target.identifier) return false;
+  if (target.namespacePrefix === null) {
+    return !userDefined.has(name);
+  }
+  if (target.namespacePrefix === 'std') {
+    return isImportedStdSymbol(name, userDefined, ctx);
+  }
+  return false;
+}
+
+function checkFieldCallNode(
+  fnNode: SyntaxNode,
+  callNode: SyntaxNode,
+  targets: ParsedBanTarget[],
+  record: RecordFn
+): void {
+  const fieldName = fnNode.childForFieldName('field')?.text;
+  if (!fieldName) return;
+  for (const target of targets) {
+    if (target.namespacePrefix === null && fieldName === target.identifier) {
+      record(callNode, target);
+    }
+  }
+}
+
 function checkCallNode(
   node: SyntaxNode,
   ctx: FileContext,
@@ -278,13 +310,7 @@ function checkCallNode(
   if (!fnNode) return;
 
   if (fnNode.type === 'field_expression') {
-    const fieldName = fnNode.childForFieldName('field')?.text;
-    if (!fieldName) return;
-    for (const target of targets) {
-      if (target.namespacePrefix === null && fieldName === target.identifier) {
-        record(node, target);
-      }
-    }
+    checkFieldCallNode(fnNode, node, targets, record);
     return;
   }
 
@@ -295,13 +321,7 @@ function checkCallNode(
       : fnNode.text;
 
   for (const target of targets) {
-    if (fnName !== target.identifier) continue;
-    if (target.namespacePrefix === null && !ctx.userDefinedFunctions.has(fnName)) {
-      record(node, target);
-    } else if (
-      target.namespacePrefix === 'std' &&
-      isImportedStdSymbol(fnName, ctx.userDefinedFunctions, ctx)
-    ) {
+    if (matchesUnqualifiedTarget(fnName, target, ctx.userDefinedFunctions, ctx)) {
       record(node, target);
     }
   }
@@ -322,13 +342,7 @@ function checkTypeNode(
 
   const typeName = node.text;
   for (const target of targets) {
-    if (typeName !== target.identifier) continue;
-    if (target.namespacePrefix === null && !ctx.userDefinedTypes.has(typeName)) {
-      record(node, target);
-    } else if (
-      target.namespacePrefix === 'std' &&
-      isImportedStdSymbol(typeName, ctx.userDefinedTypes, ctx)
-    ) {
+    if (matchesUnqualifiedTarget(typeName, target, ctx.userDefinedTypes, ctx)) {
       record(node, target);
     }
   }

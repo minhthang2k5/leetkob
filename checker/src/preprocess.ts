@@ -1,6 +1,15 @@
 type ScanState =
   'NORMAL' | 'IN_STRING' | 'IN_CHAR' | 'IN_RAW_STRING' | 'LINE_COMMENT' | 'BLOCK_COMMENT';
 
+interface ScanCursor {
+  code: string;
+  out: string[];
+  state: ScanState;
+  rawEndMarker: string;
+  blockHasNewline: boolean;
+  i: number;
+}
+
 const STRING_PREFIXES = new Set(['u8', 'u', 'U', 'L']);
 
 function isIdentChar(ch: string | undefined): boolean {
@@ -20,7 +29,6 @@ function hasValidRawStringPrefix(code: string, i: number): boolean {
 /**
  * Checks whether `code` at index `i` starts a C++ raw string literal (`R"delim(...)delim"`
  * or prefixed `u8R"..."`, `uR"..."`, `UR"..."`, `LR"..."`).
- * Returns the closing delimiter `)<delim>"` and index after the opening `(` if matched.
  */
 function matchRawStringStart(
   code: string,
@@ -29,7 +37,6 @@ function matchRawStringStart(
   if (code[i] !== 'R' || code[i + 1] !== '"') return null;
   if (!hasValidRawStringPrefix(code, i)) return null;
 
-  // C++ raw string delimiter: up to 16 chars, no whitespace, backslash, or parentheses.
   let j = i + 2;
   while (j < code.length && j - (i + 2) <= 16) {
     const c = code[j];
@@ -45,116 +52,138 @@ function matchRawStringStart(
   return null;
 }
 
+function stepNormal(cur: ScanCursor): void {
+  const ch = cur.code[cur.i];
+  const next = cur.code[cur.i + 1];
+
+  const raw = matchRawStringStart(cur.code, cur.i);
+  if (raw) {
+    cur.out.push(cur.code.slice(cur.i, raw.bodyStart));
+    cur.rawEndMarker = raw.endMarker;
+    cur.state = 'IN_RAW_STRING';
+    cur.i = raw.bodyStart;
+    return;
+  }
+
+  if (ch === '/' && next === '/') {
+    cur.state = 'LINE_COMMENT';
+    cur.i += 2;
+    return;
+  }
+
+  if (ch === '/' && next === '*') {
+    cur.state = 'BLOCK_COMMENT';
+    cur.blockHasNewline = false;
+    cur.i += 2;
+    return;
+  }
+
+  if (ch === '"') cur.state = 'IN_STRING';
+  else if (ch === "'") cur.state = 'IN_CHAR';
+
+  cur.out.push(ch);
+  cur.i += 1;
+}
+
+function stepQuoted(cur: ScanCursor, quote: '"' | "'"): void {
+  const ch = cur.code[cur.i];
+  const next = cur.code[cur.i + 1];
+  cur.out.push(ch);
+
+  if (ch === '\\' && next !== undefined) {
+    cur.out.push(next);
+    cur.i += 2;
+    return;
+  }
+  if (ch === quote) {
+    cur.state = 'NORMAL';
+  }
+  cur.i += 1;
+}
+
+function stepRawString(cur: ScanCursor): void {
+  if (cur.code.startsWith(cur.rawEndMarker, cur.i)) {
+    cur.out.push(cur.rawEndMarker);
+    cur.i += cur.rawEndMarker.length;
+    cur.state = 'NORMAL';
+    return;
+  }
+  cur.out.push(cur.code[cur.i]);
+  cur.i += 1;
+}
+
+function stepLineComment(cur: ScanCursor): void {
+  const ch = cur.code[cur.i];
+  const next = cur.code[cur.i + 1];
+  if (ch === '\r' && next === '\n') {
+    cur.out.push('\r\n');
+    cur.i += 2;
+    cur.state = 'NORMAL';
+    return;
+  }
+  if (ch === '\n') {
+    cur.out.push('\n');
+    cur.i += 1;
+    cur.state = 'NORMAL';
+    return;
+  }
+  cur.i += 1;
+}
+
+function stepBlockComment(cur: ScanCursor): void {
+  const ch = cur.code[cur.i];
+  const next = cur.code[cur.i + 1];
+  if (ch === '*' && next === '/') {
+    if (!cur.blockHasNewline) cur.out.push(' ');
+    cur.i += 2;
+    cur.state = 'NORMAL';
+    return;
+  }
+  if (ch === '\n') {
+    cur.out.push('\n');
+    cur.blockHasNewline = true;
+  }
+  cur.i += 1;
+}
+
 /**
  * Removes all C++ `//...` and `/*...*\/` comments while preserving string/char/raw-string
  * literals and keeping the exact number of lines and 1-based line positions.
  */
 export function stripCommentsKeepLines(code: string): string {
-  const out: string[] = [];
-  let state: ScanState = 'NORMAL';
-  let rawEndMarker = '';
-  let blockHasNewline = false;
-  let i = 0;
+  const cur: ScanCursor = {
+    code,
+    out: [],
+    state: 'NORMAL',
+    rawEndMarker: '',
+    blockHasNewline: false,
+    i: 0
+  };
 
-  while (i < code.length) {
-    const ch = code[i];
-    const next = code[i + 1];
-
-    if (state === 'NORMAL') {
-      const raw = matchRawStringStart(code, i);
-      if (raw) {
-        out.push(code.slice(i, raw.bodyStart));
-        rawEndMarker = raw.endMarker;
-        state = 'IN_RAW_STRING';
-        i = raw.bodyStart;
-        continue;
-      }
-
-      if (ch === '/' && next === '/') {
-        state = 'LINE_COMMENT';
-        i += 2;
-        continue;
-      }
-
-      if (ch === '/' && next === '*') {
-        state = 'BLOCK_COMMENT';
-        blockHasNewline = false;
-        i += 2;
-        continue;
-      }
-
-      if (ch === '"') {
-        state = 'IN_STRING';
-      } else if (ch === "'") {
-        state = 'IN_CHAR';
-      }
-
-      out.push(ch);
-      i += 1;
-      continue;
+  while (cur.i < code.length) {
+    switch (cur.state) {
+      case 'NORMAL':
+        stepNormal(cur);
+        break;
+      case 'IN_STRING':
+        stepQuoted(cur, '"');
+        break;
+      case 'IN_CHAR':
+        stepQuoted(cur, "'");
+        break;
+      case 'IN_RAW_STRING':
+        stepRawString(cur);
+        break;
+      case 'LINE_COMMENT':
+        stepLineComment(cur);
+        break;
+      case 'BLOCK_COMMENT':
+        stepBlockComment(cur);
+        break;
     }
-
-    if (state === 'IN_STRING' || state === 'IN_CHAR') {
-      out.push(ch);
-      if (ch === '\\' && next !== undefined) {
-        out.push(next);
-        i += 2;
-        continue;
-      }
-      if ((state === 'IN_STRING' && ch === '"') || (state === 'IN_CHAR' && ch === "'")) {
-        state = 'NORMAL';
-      }
-      i += 1;
-      continue;
-    }
-
-    if (state === 'IN_RAW_STRING') {
-      if (code.startsWith(rawEndMarker, i)) {
-        out.push(rawEndMarker);
-        i += rawEndMarker.length;
-        state = 'NORMAL';
-        continue;
-      }
-      out.push(ch);
-      i += 1;
-      continue;
-    }
-
-    if (state === 'LINE_COMMENT') {
-      if (ch === '\r' && next === '\n') {
-        out.push('\r\n');
-        i += 2;
-        state = 'NORMAL';
-        continue;
-      }
-      if (ch === '\n') {
-        out.push('\n');
-        i += 1;
-        state = 'NORMAL';
-        continue;
-      }
-      i += 1;
-      continue;
-    }
-
-    // BLOCK_COMMENT
-    if (ch === '*' && next === '/') {
-      // Avoid merging adjacent tokens on the same line (e.g., `int/*c*/x` -> `int x`).
-      if (!blockHasNewline) {
-        out.push(' ');
-      }
-      i += 2;
-      state = 'NORMAL';
-      continue;
-    }
-    if (ch === '\n') {
-      out.push('\n');
-      blockHasNewline = true;
-    }
-    i += 1;
   }
 
-  return out.join('');
+  return cur.out.join('');
 }
 
 /**

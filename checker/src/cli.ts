@@ -131,6 +131,32 @@ export function parseCliArgs(argv: string[]): CliOptions {
   return state as CliOptions;
 }
 
+function resolveTimeoutMs(
+  opts: CliOptions,
+  cfg: CheckerConfig,
+  useGemini: boolean
+): number {
+  if (opts.timeoutMs !== undefined) return opts.timeoutMs;
+  if (process.env.CHECKER_TIMEOUT_MS) return cfg.timeoutMs;
+  return useGemini ? DEFAULT_GEMINI_CLI_TIMEOUT_MS : cfg.timeoutMs;
+}
+
+function buildJudgeForCli(
+  opts: CliOptions,
+  cfg: CheckerConfig,
+  useGemini: boolean
+): SemanticJudge | undefined {
+  if (opts.modelOff) return undefined;
+  if (opts.judge) return opts.judge;
+  if (useGemini) {
+    return new GeminiJudge({
+      maxRetries: cfg.maxRetries,
+      retryDelayMs: cfg.retryDelayMs
+    });
+  }
+  return new AnthropicJudge();
+}
+
 function resolveRuntimeJudge(
   opts: CliOptions,
   cfg: CheckerConfig
@@ -141,31 +167,10 @@ function resolveRuntimeJudge(
     resolvedProvider === 'gemini' ||
     (!resolvedProvider && Boolean(cfg.geminiApiKey) && !cfg.anthropicApiKey);
 
-  let judge: SemanticJudge | undefined;
-  if (!opts.modelOff) {
-    if (opts.judge) {
-      judge = opts.judge;
-    } else if (useGemini) {
-      judge = new GeminiJudge({
-        maxRetries: cfg.maxRetries,
-        retryDelayMs: cfg.retryDelayMs
-      });
-    } else {
-      judge = new AnthropicJudge();
-    }
-  }
-
+  const judge = buildJudgeForCli(opts, cfg, useGemini);
   const defaultDelay = useGemini && !opts.modelOff ? DEFAULT_GEMINI_CLI_DELAY_MS : 0;
   const delayMs = opts.delayMs ?? cfg.delayMs ?? defaultDelay;
-
-  let timeoutMs = opts.timeoutMs;
-  if (timeoutMs === undefined) {
-    if (process.env.CHECKER_TIMEOUT_MS) {
-      timeoutMs = cfg.timeoutMs;
-    } else {
-      timeoutMs = useGemini ? DEFAULT_GEMINI_CLI_TIMEOUT_MS : cfg.timeoutMs;
-    }
-  }
+  const timeoutMs = resolveTimeoutMs(opts, cfg, useGemini);
 
   return { judge, delayMs, timeoutMs };
 }

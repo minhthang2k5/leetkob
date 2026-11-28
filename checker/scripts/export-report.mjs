@@ -34,7 +34,7 @@ function parseArgs(argv) {
 function csvCell(value) {
   const str = String(value ?? '');
   if (/[",\r\n]/.test(str)) {
-    return `"${str.replace(/"/g, '""')}"`;
+    return `"${str.replaceAll('"', '""')}"`;
   }
   return str;
 }
