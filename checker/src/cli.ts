@@ -8,6 +8,7 @@ import {
   DEFAULT_GEMINI_CLI_TIMEOUT_MS,
   loadCheckerConfig
 } from './config';
+import type { CheckerConfig } from './config';
 import { GeminiJudge } from './gemini-judge';
 import { checkSubmission } from './index';
 
@@ -33,6 +34,13 @@ export interface PredictionRecord {
   constraint: string;
   verdict: 'pass' | 'violation' | 'unsure';
   evidence: Array<{ line: number; text: string }>;
+}
+
+interface SolutionTask {
+  solutionId: string;
+  statement: string;
+  constraints: CheckConstraint[];
+  code: string;
 }
 
 export function loadEnvFile(envPath: string): void {
@@ -68,100 +76,113 @@ function loadDefaultEnvFiles(): void {
   }
 }
 
+function parseProviderFlag(value: string): 'anthropic' | 'gemini' {
+  if (value !== 'anthropic' && value !== 'gemini') {
+    throw new Error(`Unsupported provider: ${value}`);
+  }
+  return value;
+}
+
 export function parseCliArgs(argv: string[]): CliOptions {
-  let datasetDir: string | undefined;
-  let outPath: string | undefined;
-  let callsOutPath: string | undefined;
-  let provider: 'anthropic' | 'gemini' | undefined;
-  let modelOff = process.env.MODEL_OFF === '1';
-  let timeoutMs: number | undefined;
-  let delayMs: number | undefined;
+  const state: Partial<CliOptions> & { modelOff: boolean } = {
+    modelOff: process.env.MODEL_OFF === '1'
+  };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === '--out' || arg === '-o') {
-      outPath = argv[++i];
-    } else if (arg === '--data') {
-      datasetDir = argv[++i];
-    } else if (arg === '--calls-out') {
-      callsOutPath = argv[++i];
-    } else if (arg === '--provider') {
-      const p = argv[++i];
-      if (p !== 'anthropic' && p !== 'gemini') {
-        throw new Error(`Unsupported provider: ${p}`);
-      }
-      provider = p;
-    } else if (arg === '--timeout-ms') {
-      timeoutMs = Number(argv[++i]);
-    } else if (arg === '--delay-ms') {
-      delayMs = Number(argv[++i]);
-    } else if (arg === '--model-off') {
-      modelOff = true;
-    } else if (!arg.startsWith('-') && !datasetDir) {
-      datasetDir = arg;
-    } else {
-      throw new Error(`Unknown or unexpected argument: ${arg}`);
+    switch (arg) {
+      case '--out':
+      case '-o':
+        state.outPath = argv[++i];
+        break;
+      case '--data':
+        state.datasetDir = argv[++i];
+        break;
+      case '--calls-out':
+        state.callsOutPath = argv[++i];
+        break;
+      case '--provider':
+        state.provider = parseProviderFlag(argv[++i]);
+        break;
+      case '--timeout-ms':
+        state.timeoutMs = Number(argv[++i]);
+        break;
+      case '--delay-ms':
+        state.delayMs = Number(argv[++i]);
+        break;
+      case '--model-off':
+        state.modelOff = true;
+        break;
+      default:
+        if (!arg.startsWith('-') && !state.datasetDir) {
+          state.datasetDir = arg;
+        } else {
+          throw new Error(`Unknown or unexpected argument: ${arg}`);
+        }
     }
   }
 
-  if (!datasetDir || !outPath) {
+  if (!state.datasetDir || !state.outPath) {
     throw new Error(
       'Usage: leetcob-checker <dataset_dir> --out <predictions.jsonl> [--calls-out <calls.jsonl>] [--provider anthropic|gemini] [--delay-ms <ms>] [--model-off]'
     );
   }
 
-  return { datasetDir, outPath, callsOutPath, provider, modelOff, timeoutMs, delayMs };
+  return state as CliOptions;
 }
 
-export async function runCli(opts: CliOptions): Promise<{
-  predictions: PredictionRecord[];
-  calls: Array<ModelCallLog & { solution: string }>;
-}> {
-  const root = resolve(opts.datasetDir);
-  const problemsDir = join(root, 'problems');
-  const solutionsDir = join(root, 'solutions');
-
-  if (!existsSync(problemsDir) || !existsSync(solutionsDir)) {
-    throw new Error(`Invalid dataset directory: ${root}`);
-  }
-
-  const cfg = loadCheckerConfig();
-  // Mặc định ưu tiên theo CHECKER_PROVIDER / --provider; nếu 'auto' thì chọn Gemini
-  // khi có GEMINI_API_KEY (và không có ANTHROPIC_API_KEY).
+function resolveRuntimeJudge(
+  opts: CliOptions,
+  cfg: CheckerConfig
+): { judge: SemanticJudge | undefined; delayMs: number; timeoutMs: number } {
   const resolvedProvider =
     opts.provider ?? (cfg.provider === 'auto' ? undefined : cfg.provider);
   const useGemini =
     resolvedProvider === 'gemini' ||
     (!resolvedProvider && Boolean(cfg.geminiApiKey) && !cfg.anthropicApiKey);
 
-  const judge = opts.modelOff
-    ? undefined
-    : (opts.judge ??
-      (useGemini
-        ? new GeminiJudge({
-            maxRetries: cfg.maxRetries,
-            retryDelayMs: cfg.retryDelayMs
-          })
-        : new AnthropicJudge()));
-  const delayMs =
-    opts.delayMs ??
-    cfg.delayMs ??
-    (useGemini && !opts.modelOff ? DEFAULT_GEMINI_CLI_DELAY_MS : 0);
-  const timeoutMs =
-    opts.timeoutMs ??
-    (process.env.CHECKER_TIMEOUT_MS
-      ? cfg.timeoutMs
-      : useGemini
-        ? DEFAULT_GEMINI_CLI_TIMEOUT_MS
-        : cfg.timeoutMs);
+  let judge: SemanticJudge | undefined;
+  if (!opts.modelOff) {
+    if (opts.judge) {
+      judge = opts.judge;
+    } else if (useGemini) {
+      judge = new GeminiJudge({
+        maxRetries: cfg.maxRetries,
+        retryDelayMs: cfg.retryDelayMs
+      });
+    } else {
+      judge = new AnthropicJudge();
+    }
+  }
+
+  const defaultDelay = useGemini && !opts.modelOff ? DEFAULT_GEMINI_CLI_DELAY_MS : 0;
+  const delayMs = opts.delayMs ?? cfg.delayMs ?? defaultDelay;
+
+  let timeoutMs = opts.timeoutMs;
+  if (timeoutMs === undefined) {
+    if (process.env.CHECKER_TIMEOUT_MS) {
+      timeoutMs = cfg.timeoutMs;
+    } else {
+      timeoutMs = useGemini ? DEFAULT_GEMINI_CLI_TIMEOUT_MS : cfg.timeoutMs;
+    }
+  }
+
+  return { judge, delayMs, timeoutMs };
+}
+
+function collectDatasetTasks(root: string): SolutionTask[] {
+  const problemsDir = join(root, 'problems');
+  const solutionsDir = join(root, 'solutions');
+  if (!existsSync(problemsDir) || !existsSync(solutionsDir)) {
+    throw new Error(`Invalid dataset directory: ${root}`);
+  }
+
   const problemIds = readdirSync(problemsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name)
     .sort();
 
-  const predictions: PredictionRecord[] = [];
-  const allCalls: Array<ModelCallLog & { solution: string }> = [];
-
+  const tasks: SolutionTask[] = [];
   for (const pid of problemIds) {
     const statementPath = join(problemsDir, pid, 'statement.md');
     const constraintsPath = join(problemsDir, pid, 'constraints.json');
@@ -187,60 +208,100 @@ export async function runCli(opts: CliOptions): Promise<{
       .sort();
 
     for (const file of cppFiles) {
-      const solutionId = `${pid}/${file.replace(/\.cpp$/, '')}`;
-      const code = readFileSync(join(solProblemDir, file), 'utf8');
-      const isDirectCli = process.env.NODE_ENV !== 'test' && require.main === module;
-      if (isDirectCli) {
-        process.stdout.write(`${solutionId} ... `);
-      }
-      const result = await checkSubmission(
-        { statement, constraints, code },
-        {
-          modelOff: opts.modelOff,
-          judge,
-          timeoutMs
-        }
-      );
-
-      if (isDirectCli) {
-        const callInfo =
-          result.calls.length > 0
-            ? `${result.calls[0].provider}:${result.calls[0].model} ${result.calls[0].status} (${result.calls[0].ms}ms)`
-            : 'HARD_RULE_ONLY';
-        console.log(callInfo);
-      }
-
-      if (result.calls.length > 0 && delayMs > 0) {
-        await new Promise((r) => setTimeout(r, delayMs));
-      }
-
-      // Chuyển verdict sang chữ thường ("pass" | "violation" | "unsure") vì `eval.mjs`
-      // yêu cầu chữ thường (khác với DB/API dùng chữ HOA).
-      for (const v of result.verdicts) {
-        predictions.push({
-          solution: solutionId,
-          constraint: v.constraintCode,
-          verdict: v.verdict.toLowerCase() as PredictionRecord['verdict'],
-          evidence: v.evidence
-        });
-      }
-
-      for (const call of result.calls) {
-        allCalls.push({ solution: solutionId, ...call });
-      }
+      tasks.push({
+        solutionId: `${pid}/${file.replace(/\.cpp$/, '')}`,
+        statement,
+        constraints,
+        code: readFileSync(join(solProblemDir, file), 'utf8')
+      });
     }
   }
+  return tasks;
+}
+
+async function runSingleTask(
+  task: SolutionTask,
+  opts: CliOptions,
+  judge: SemanticJudge | undefined,
+  timeoutMs: number,
+  delayMs: number,
+  predictions: PredictionRecord[],
+  allCalls: Array<ModelCallLog & { solution: string }>
+): Promise<void> {
+  const isDirectCli = process.env.NODE_ENV !== 'test' && require.main === module;
+  if (isDirectCli) {
+    process.stdout.write(`${task.solutionId} ... `);
+  }
+
+  const result = await checkSubmission(
+    { statement: task.statement, constraints: task.constraints, code: task.code },
+    { modelOff: opts.modelOff, judge, timeoutMs }
+  );
+
+  if (isDirectCli) {
+    const callInfo =
+      result.calls.length > 0
+        ? `${result.calls[0].provider}:${result.calls[0].model} ${result.calls[0].status} (${result.calls[0].ms}ms)`
+        : 'HARD_RULE_ONLY';
+    console.log(callInfo);
+  }
+
+  // Chuyển verdict sang chữ thường ("pass" | "violation" | "unsure") vì `eval.mjs`
+  // yêu cầu chữ thường (khác với DB/API dùng chữ HOA).
+  for (const v of result.verdicts) {
+    predictions.push({
+      solution: task.solutionId,
+      constraint: v.constraintCode,
+      verdict: v.verdict.toLowerCase() as PredictionRecord['verdict'],
+      evidence: v.evidence
+    });
+  }
+
+  for (const call of result.calls) {
+    allCalls.push({ solution: task.solutionId, ...call });
+  }
+
+  if (result.calls.length > 0 && delayMs > 0) {
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+}
+
+export async function runCli(opts: CliOptions): Promise<{
+  predictions: PredictionRecord[];
+  calls: Array<ModelCallLog & { solution: string }>;
+}> {
+  const root = resolve(opts.datasetDir);
+  const cfg = loadCheckerConfig();
+  const { judge, delayMs, timeoutMs } = resolveRuntimeJudge(opts, cfg);
+  const tasks = collectDatasetTasks(root);
+
+  const predictions: PredictionRecord[] = [];
+  const allCalls: Array<ModelCallLog & { solution: string }> = [];
+
+  await tasks.reduce(
+    (chain, task) =>
+      chain.then(() =>
+        runSingleTask(task, opts, judge, timeoutMs, delayMs, predictions, allCalls)
+      ),
+    Promise.resolve()
+  );
 
   const outFile = resolve(opts.outPath);
   mkdirSync(dirname(outFile), { recursive: true });
-  const jsonl = predictions.map((p) => JSON.stringify(p)).join('\n') + '\n';
-  writeFileSync(outFile, jsonl, 'utf8');
+  writeFileSync(
+    outFile,
+    predictions.map((p) => JSON.stringify(p)).join('\n') + '\n',
+    'utf8'
+  );
 
   if (opts.callsOutPath) {
     const callsFile = resolve(opts.callsOutPath);
     mkdirSync(dirname(callsFile), { recursive: true });
-    const callsJsonl = allCalls.map((c) => JSON.stringify(c)).join('\n') + '\n';
-    writeFileSync(callsFile, callsJsonl, 'utf8');
+    writeFileSync(
+      callsFile,
+      allCalls.map((c) => JSON.stringify(c)).join('\n') + '\n',
+      'utf8'
+    );
   }
 
   return { predictions, calls: allCalls };

@@ -4,7 +4,17 @@ type ScanState =
 const STRING_PREFIXES = new Set(['u8', 'u', 'U', 'L']);
 
 function isIdentChar(ch: string | undefined): boolean {
-  return ch !== undefined && /[A-Za-z0-9_]/.test(ch);
+  return ch !== undefined && /\w/.test(ch);
+}
+
+function hasValidRawStringPrefix(code: string, i: number): boolean {
+  const prev1 = i >= 1 ? code[i - 1] : undefined;
+  if (!isIdentChar(prev1)) return true;
+
+  if (i >= 2 && code.slice(i - 2, i) === 'u8' && !isIdentChar(code[i - 3])) {
+    return true;
+  }
+  return prev1 !== undefined && STRING_PREFIXES.has(prev1) && !isIdentChar(code[i - 2]);
 }
 
 /**
@@ -17,20 +27,7 @@ function matchRawStringStart(
   i: number
 ): { endMarker: string; bodyStart: number } | null {
   if (code[i] !== 'R' || code[i + 1] !== '"') return null;
-
-  // Verify `R` is not part of a larger identifier unless it is a valid string prefix.
-  const prev1 = i >= 1 ? code[i - 1] : undefined;
-  if (isIdentChar(prev1)) {
-    const two = i >= 2 ? code.slice(i - 2, i) : '';
-    const one = prev1 ?? '';
-    const prefixLen =
-      two === 'u8' && !isIdentChar(code[i - 3])
-        ? 2
-        : STRING_PREFIXES.has(one) && !isIdentChar(code[i - 2])
-          ? 1
-          : 0;
-    if (prefixLen === 0) return null;
-  }
+  if (!hasValidRawStringPrefix(code, i)) return null;
 
   // C++ raw string delimiter: up to 16 chars, no whitespace, backslash, or parentheses.
   let j = i + 2;
@@ -165,5 +162,5 @@ export function stripCommentsKeepLines(code: string): string {
  * normalizing CRLF to LF.
  */
 export function splitLines(code: string): string[] {
-  return code.replace(/\r\n/g, '\n').split('\n');
+  return code.replaceAll('\r\n', '\n').split('\n');
 }

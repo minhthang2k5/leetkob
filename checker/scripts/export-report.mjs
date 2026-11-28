@@ -47,6 +47,17 @@ function readJsonl(filePath) {
     .map((l) => JSON.parse(l));
 }
 
+function evaluateRowStatus(label, verdict, evList, expectedLines) {
+  if (verdict === 'unsure') return 'UNSURE';
+  if (label === 'pass' && verdict === 'violation') return 'WRONGFUL_DEDUCTION';
+  if (label === 'violation' && verdict === 'pass') return 'MISSED_VIOLATION';
+  if (label === 'violation' && verdict === 'violation') {
+    const matched = evList.some((e) => expectedLines.includes(e.line));
+    return matched ? 'CAUGHT' : 'WRONG_EVIDENCE_LINE';
+  }
+  return 'OK';
+}
+
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   const dataRoot = resolve(opts.data);
@@ -88,10 +99,7 @@ function main() {
   ];
 
   const rows = [headers.map(csvCell).join(',')];
-  let wrongful = 0;
-  let caught = 0;
-  let totalViol = 0;
-  let unsure = 0;
+  const counts = { wrongful: 0, caught: 0, totalViol: 0, unsure: 0 };
 
   for (const l of labels) {
     const [pid] = l.solution.split('/');
@@ -99,27 +107,12 @@ function main() {
     const verdict = pred?.verdict ?? 'unsure';
     const evList = pred?.evidence ?? [];
     const evStr = evList.map((e) => `L${e.line}: ${e.text}`).join(' | ');
+    const status = evaluateRowStatus(l.label, verdict, evList, l.evidence ?? []);
 
-    let status = 'OK';
-    if (l.label === 'violation') totalViol += 1;
-
-    if (verdict === 'unsure') {
-      unsure += 1;
-      status = 'UNSURE';
-    } else if (l.label === 'pass' && verdict === 'violation') {
-      wrongful += 1;
-      status = 'WRONGFUL_DEDUCTION';
-    } else if (l.label === 'violation' && verdict === 'pass') {
-      status = 'MISSED_VIOLATION';
-    } else if (l.label === 'violation' && verdict === 'violation') {
-      const lineMatched = evList.some((e) => l.evidence.includes(e.line));
-      if (lineMatched) {
-        caught += 1;
-        status = 'CAUGHT';
-      } else {
-        status = 'WRONG_EVIDENCE_LINE';
-      }
-    }
+    if (l.label === 'violation') counts.totalViol += 1;
+    if (status === 'UNSURE') counts.unsure += 1;
+    if (status === 'WRONGFUL_DEDUCTION') counts.wrongful += 1;
+    if (status === 'CAUGHT') counts.caught += 1;
 
     rows.push(
       [
@@ -144,7 +137,7 @@ function main() {
   writeFileSync(outFile, '\uFEFF' + rows.join('\r\n') + '\r\n', 'utf8');
 
   console.log(
-    `Exported ${labels.length} rows to ${outFile} (wrongful=${wrongful}, caught=${caught}/${totalViol}, unsure=${unsure}/${labels.length})`
+    `Exported ${labels.length} rows to ${outFile} (wrongful=${counts.wrongful}, caught=${counts.caught}/${counts.totalViol}, unsure=${counts.unsure}/${labels.length})`
   );
 }
 

@@ -30,6 +30,50 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function parseEvidenceList(rawEvidence: unknown): EvidenceLine[] | null {
+  if (!Array.isArray(rawEvidence)) return null;
+  const evidence: EvidenceLine[] = [];
+  for (const ev of rawEvidence) {
+    if (
+      !isPlainObject(ev) ||
+      typeof ev.line !== 'number' ||
+      !Number.isInteger(ev.line) ||
+      typeof ev.text !== 'string'
+    ) {
+      return null;
+    }
+    evidence.push({ line: ev.line, text: ev.text });
+  }
+  return evidence;
+}
+
+function parseSingleVerdict(item: unknown): RawConstraintVerdict | null {
+  if (!isPlainObject(item)) return null;
+  if (typeof item.constraintCode !== 'string' || !item.constraintCode) return null;
+  if (
+    typeof item.verdict !== 'string' ||
+    !VALID_VERDICTS.has(item.verdict as VerdictValue)
+  ) {
+    return null;
+  }
+  if (
+    item.reason !== undefined &&
+    item.reason !== null &&
+    typeof item.reason !== 'string'
+  ) {
+    return null;
+  }
+  const evidence = parseEvidenceList(item.evidence);
+  if (!evidence) return null;
+
+  return {
+    constraintCode: item.constraintCode,
+    verdict: item.verdict as VerdictValue,
+    evidence,
+    reason: item.reason ?? null
+  };
+}
+
 function parseRawVerdicts(raw: unknown): Map<string, RawConstraintVerdict> | null {
   if (!isPlainObject(raw) || !Array.isArray(raw.verdicts)) {
     return null;
@@ -37,45 +81,10 @@ function parseRawVerdicts(raw: unknown): Map<string, RawConstraintVerdict> | nul
 
   const byCode = new Map<string, RawConstraintVerdict>();
   for (const item of raw.verdicts) {
-    if (!isPlainObject(item)) return null;
-    if (typeof item.constraintCode !== 'string' || !item.constraintCode) return null;
-    if (
-      typeof item.verdict !== 'string' ||
-      !VALID_VERDICTS.has(item.verdict as VerdictValue)
-    ) {
-      return null;
-    }
-    if (!Array.isArray(item.evidence)) return null;
-
-    const evidence: EvidenceLine[] = [];
-    for (const ev of item.evidence) {
-      if (
-        !isPlainObject(ev) ||
-        typeof ev.line !== 'number' ||
-        !Number.isInteger(ev.line) ||
-        typeof ev.text !== 'string'
-      ) {
-        return null;
-      }
-      evidence.push({ line: ev.line, text: ev.text });
-    }
-
-    if (
-      item.reason !== undefined &&
-      item.reason !== null &&
-      typeof item.reason !== 'string'
-    ) {
-      return null;
-    }
-
-    byCode.set(item.constraintCode, {
-      constraintCode: item.constraintCode,
-      verdict: item.verdict as VerdictValue,
-      evidence,
-      reason: item.reason ?? null
-    });
+    const parsed = parseSingleVerdict(item);
+    if (!parsed) return null;
+    byCode.set(parsed.constraintCode, parsed);
   }
-
   return byCode;
 }
 
@@ -112,7 +121,6 @@ export function applyGuardrails(
   call: ModelCallLog,
   originalLines: string[]
 ): CheckVerdict[] {
-  // 1. Mạng lỗi hoặc quá timeout -> không đoán bừa, ép toàn bộ sang UNSURE.
   if (call.status === 'TIMEOUT') {
     return constraints.map((c) => guardrailUnsure(c, 'timeout'));
   }
@@ -120,7 +128,6 @@ export function applyGuardrails(
     return constraints.map((c) => guardrailUnsure(c, 'api error'));
   }
 
-  // 2. Kiểm tra cấu trúc JSON trả về có đúng schema hợp đồng hay không.
   const parsed = parseRawVerdicts(raw);
   if (!parsed) {
     return constraints.map((c) => guardrailUnsure(c, 'schema invalid'));
@@ -132,8 +139,6 @@ export function applyGuardrails(
       return guardrailUnsure(constraint, 'schema invalid');
     }
 
-    // 3. Chống AI "bịa" dòng code (hallucination): từng dòng `evidence` phải
-    // tồn tại và khớp nguyên văn (sau khi trim) với bài nộp gốc của sinh viên.
     const mismatchReason = verifyEvidenceLines(item.evidence, originalLines);
     if (mismatchReason) {
       return guardrailUnsure(constraint, mismatchReason);

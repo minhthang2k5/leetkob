@@ -112,6 +112,41 @@ export class GeminiJudge implements SemanticJudge {
     this.fetchFn = opts.fetchFn ?? globalThis.fetch;
   }
 
+  private async fetchWithRetry(
+    url: string,
+    body: string,
+    signal: AbortSignal,
+    attempt: number
+  ): Promise<Response> {
+    const res = await this.fetchFn(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body
+    });
+
+    if (res.status !== 429 || attempt >= this.maxRetries) {
+      if (!res.ok && process.env.NODE_ENV !== 'test') {
+        const errText = await res.text().catch(() => '');
+        console.error(
+          `[gemini] HTTP ${res.status}: ${errText.slice(0, 160).replaceAll(/\s+/g, ' ')}`
+        );
+      }
+      return res;
+    }
+
+    const retryAfterSec = Number(res.headers.get('retry-after') ?? '0');
+    const waitMs =
+      retryAfterSec > 0 ? retryAfterSec * 1000 : this.retryDelayMs * (attempt + 1);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error(
+        `[gemini] HTTP 429 rate-limit, waiting ${Math.round(waitMs / 1000)}s (retry ${attempt + 1}/${this.maxRetries})...`
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    return this.fetchWithRetry(url, body, signal, attempt + 1);
+  }
+
   async judge(
     req: SemanticRequest,
     opts: { timeoutMs: number }
@@ -123,60 +158,27 @@ export class GeminiJudge implements SemanticJudge {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+    const body = JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0,
+        maxOutputTokens: this.maxOutputTokens,
+        responseMimeType: 'application/json',
+        responseSchema: GEMINI_RESPONSE_SCHEMA
+      }
+    });
 
     try {
-      let res: Response | null = null;
-      for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-        res = await this.fetchFn(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            systemInstruction: {
-              parts: [{ text: SYSTEM_PROMPT }]
-            },
-            contents: [
-              {
-                role: 'user',
-                parts: [{ text: prompt }]
-              }
-            ],
-            generationConfig: {
-              temperature: 0,
-              maxOutputTokens: this.maxOutputTokens,
-              responseMimeType: 'application/json',
-              responseSchema: GEMINI_RESPONSE_SCHEMA
-            }
-          })
-        });
+      const res = await this.fetchWithRetry(url, body, controller.signal, 0);
 
-        if (res.status !== 429 || attempt === this.maxRetries) {
-          if (!res.ok && process.env.NODE_ENV !== 'test') {
-            const errText = await res.text().catch(() => '');
-            console.error(
-              `[gemini] HTTP ${res.status}: ${errText.slice(0, 160).replace(/\s+/g, ' ')}`
-            );
-          }
-          break;
-        }
-        const retryAfterSec = Number(res.headers.get('retry-after') ?? '0');
-        const waitMs =
-          retryAfterSec > 0 ? retryAfterSec * 1000 : this.retryDelayMs * (attempt + 1);
-        if (process.env.NODE_ENV !== 'test') {
-          console.error(
-            `[gemini] HTTP 429 rate-limit, waiting ${Math.round(waitMs / 1000)}s (retry ${attempt + 1}/${this.maxRetries})...`
-          );
-        }
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-      }
-
-      if (!res || !res.ok) {
+      if (!res.ok) {
         return {
           raw: null,
           call: {
             provider: 'gemini',
             model: this.model,
-            requestId: res?.headers.get('x-goog-request-id') ?? null,
+            requestId: res.headers.get('x-goog-request-id') ?? null,
             inputTokens: 0,
             outputTokens: 0,
             ms: Date.now() - start,

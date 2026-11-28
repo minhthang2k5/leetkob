@@ -139,6 +139,26 @@ function header(title) {
   console.log(`\n${'='.repeat(72)}\n${title}\n${'='.repeat(72)}`);
 }
 
+function loadConstraints(opts) {
+  const constraints = [];
+  if (opts.constraintsPath) {
+    const raw = JSON.parse(readFileSync(resolve(opts.constraintsPath), 'utf8'));
+    for (const c of raw) {
+      constraints.push({ id: c.id, code: c.id, text: c.text });
+    }
+  }
+  opts.rules.forEach((text, idx) => {
+    const code = `C${constraints.length + 1 + idx}`;
+    constraints.push({ id: code, code, text });
+  });
+  if (constraints.length === 0) {
+    throw new Error(
+      'Provide at least one constraint via --constraints <file.json> or --rule "<text>"'
+    );
+  }
+  return constraints;
+}
+
 async function main() {
   loadEnvFile(resolve(__dirname, '../.env'));
   const opts = parseArgs(process.argv.slice(2));
@@ -146,23 +166,10 @@ async function main() {
 
   const codePath = resolve(opts.codePath);
   const originalCode = readFileSync(codePath, 'utf8');
-
   const statement = opts.statementFile
     ? readFileSync(resolve(opts.statementFile), 'utf8').trim()
     : (opts.statement ?? 'Check the C++ submission against the declared constraints.');
-
-  let constraints = [];
-  if (opts.constraintsPath) {
-    const raw = JSON.parse(readFileSync(resolve(opts.constraintsPath), 'utf8'));
-    constraints = raw.map((c) => ({ id: c.id, code: c.id, text: c.text }));
-  }
-  opts.rules.forEach((text, idx) => {
-    const code = `C${constraints.length + 1 + idx}`;
-    constraints.push({ id: code, code, text });
-  });
-  if (constraints.length === 0) {
-    throw new Error('Provide at least one constraint via --constraints <file.json> or --rule "<text>"');
-  }
+  const constraints = loadConstraints(opts);
 
   const show = (name) => opts.step === 'all' || opts.step === name;
 
@@ -255,7 +262,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+try {
+  await main();
+} catch (err) {
   console.error(err instanceof Error ? err.message : String(err));
   process.exit(1);
-});
+}

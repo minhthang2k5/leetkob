@@ -8,13 +8,11 @@ type SyntaxNode = Parser.SyntaxNode;
 let languagePromise: Promise<Parser.Language> | null = null;
 
 function getCppLanguage(): Promise<Parser.Language> {
-  if (!languagePromise) {
-    languagePromise = (async () => {
-      await Parser.init();
-      const wasmPath = require.resolve('tree-sitter-wasms/out/tree-sitter-cpp.wasm');
-      return Parser.Language.load(wasmPath);
-    })();
-  }
+  languagePromise ??= (async () => {
+    await Parser.init();
+    const wasmPath = require.resolve('tree-sitter-wasms/out/tree-sitter-cpp.wasm');
+    return Parser.Language.load(wasmPath);
+  })();
   return languagePromise;
 }
 
@@ -57,8 +55,7 @@ function extractDeclaratorName(node: SyntaxNode | null): string | null {
     return node.text;
   }
   const inner = node.childForFieldName('declarator');
-  if (inner) return extractDeclaratorName(inner);
-  return null;
+  return inner ? extractDeclaratorName(inner) : null;
 }
 
 function isInsideClassOrStruct(node: SyntaxNode): boolean {
@@ -101,76 +98,83 @@ function getQualifiedParts(node: SyntaxNode): { scope: string; name: string } | 
   return { scope: scopeText, name: nameText };
 }
 
+function collectPreprocDef(node: SyntaxNode, ctx: FileContext): void {
+  const nameNode = node.childForFieldName('name');
+  const valueNode = node.childForFieldName('value');
+  if (nameNode && valueNode) {
+    ctx.macroAliases.set(nameNode.text, valueNode.text);
+  }
+}
+
+function collectNamespaceAlias(node: SyntaxNode, ctx: FileContext): void {
+  const nameNode = node.childForFieldName('name');
+  const targetNode = node.namedChildren[node.namedChildren.length - 1];
+  if (nameNode && targetNode && ctx.stdAliases.has(targetNode.text.replace(/^::/, ''))) {
+    ctx.stdAliases.add(nameNode.text);
+  }
+}
+
+function collectUsingDeclaration(node: SyntaxNode, ctx: FileContext): void {
+  if (node.children.some((c) => c.type === 'namespace')) {
+    const nsNode = node.namedChildren[0];
+    if (nsNode && ctx.stdAliases.has(nsNode.text.replace(/^::/, ''))) {
+      ctx.usingNamespaceStd = true;
+    }
+    return;
+  }
+  const qNode = node.namedChildren.find((c) => c.type === 'qualified_identifier');
+  const parts = qNode ? getQualifiedParts(qNode) : null;
+  if (parts && ctx.stdAliases.has(parts.scope)) {
+    ctx.usingStdDecls.add(parts.name);
+  }
+}
+
+function collectFunctionDef(node: SyntaxNode, ctx: FileContext): void {
+  if (isInsideClassOrStruct(node)) return;
+  const decl = node.childForFieldName('declarator');
+  if (decl?.type !== 'function_declarator') return;
+  const inner = decl.childForFieldName('declarator');
+  const fnName = extractDeclaratorName(inner);
+  if (fnName && !inner?.text.includes('::')) {
+    ctx.userDefinedFunctions.add(fnName);
+  }
+}
+
+function collectTypeDef(node: SyntaxNode, ctx: FileContext): void {
+  if (isInsideClassOrStruct(node)) return;
+  const typeName = node.childForFieldName('name')?.text;
+  if (typeName) ctx.userDefinedTypes.add(typeName);
+}
+
 function collectFileContext(root: SyntaxNode): FileContext {
-  const stdAliases = new Set<string>(['std']);
-  let usingNamespaceStd = false;
-  const usingStdDecls = new Set<string>();
-  const userDefinedFunctions = new Set<string>();
-  const userDefinedTypes = new Set<string>();
-  const macroAliases = new Map<string, string>();
+  const ctx: FileContext = {
+    stdAliases: new Set<string>(['std']),
+    usingNamespaceStd: false,
+    usingStdDecls: new Set<string>(),
+    userDefinedFunctions: new Set<string>(),
+    userDefinedTypes: new Set<string>(),
+    macroAliases: new Map<string, string>()
+  };
 
   walk(root, (node) => {
     if (node.type === 'preproc_def' || node.type === 'preproc_function_def') {
-      const nameNode = node.childForFieldName('name');
-      const valueNode = node.childForFieldName('value');
-      if (nameNode && valueNode) {
-        macroAliases.set(nameNode.text, valueNode.text);
-      }
+      collectPreprocDef(node, ctx);
     } else if (node.type === 'namespace_alias_definition') {
-      const nameNode = node.childForFieldName('name');
-      // Target namespace is the last named child (after '=').
-      const targetNode = node.namedChildren[node.namedChildren.length - 1];
-      if (nameNode && targetNode) {
-        const targetText = targetNode.text.replace(/^::/, '');
-        if (stdAliases.has(targetText)) {
-          stdAliases.add(nameNode.text);
-        }
-      }
+      collectNamespaceAlias(node, ctx);
     } else if (node.type === 'using_declaration') {
-      const hasNamespaceKw = node.children.some((c) => c.type === 'namespace');
-      if (hasNamespaceKw) {
-        const nsNode = node.namedChildren[0];
-        if (nsNode && stdAliases.has(nsNode.text.replace(/^::/, ''))) {
-          usingNamespaceStd = true;
-        }
-      } else {
-        const qNode = node.namedChildren.find((c) => c.type === 'qualified_identifier');
-        if (qNode) {
-          const parts = getQualifiedParts(qNode);
-          if (parts && stdAliases.has(parts.scope)) {
-            usingStdDecls.add(parts.name);
-          }
-        }
-      }
-    } else if (node.type === 'function_definition' && !isInsideClassOrStruct(node)) {
-      const decl = node.childForFieldName('declarator');
-      if (decl?.type === 'function_declarator') {
-        const fnName = extractDeclaratorName(decl.childForFieldName('declarator'));
-        if (fnName && !decl.childForFieldName('declarator')?.text.includes('::')) {
-          userDefinedFunctions.add(fnName);
-        }
-      }
-    } else if (
-      (node.type === 'struct_specifier' || node.type === 'class_specifier') &&
-      !isInsideClassOrStruct(node)
-    ) {
-      const typeName = node.childForFieldName('name')?.text;
-      if (typeName) userDefinedTypes.add(typeName);
+      collectUsingDeclaration(node, ctx);
+    } else if (node.type === 'function_definition') {
+      collectFunctionDef(node, ctx);
+    } else if (node.type === 'struct_specifier' || node.type === 'class_specifier') {
+      collectTypeDef(node, ctx);
     }
   });
 
-  return {
-    stdAliases,
-    usingNamespaceStd,
-    usingStdDecls,
-    userDefinedFunctions,
-    userDefinedTypes,
-    macroAliases
-  };
+  return ctx;
 }
 
 function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return s.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 function macroExpandsToTarget(
@@ -178,20 +182,156 @@ function macroExpandsToTarget(
   target: ParsedBanTarget,
   ctx: FileContext
 ): boolean {
-  const identRe = new RegExp(`\\b${escapeRegExp(target.identifier)}\\b`);
+  const escapedIdent = escapeRegExp(target.identifier);
+  const identRe = new RegExp(String.raw`\b${escapedIdent}\b`);
   if (!identRe.test(macroBody)) return false;
-  if (target.namespacePrefix === 'std') {
-    const stdPattern = [...ctx.stdAliases].map(escapeRegExp).join('|');
-    const qualifiedRe = new RegExp(
-      `\\b(?:${stdPattern})\\s*::\\s*${escapeRegExp(target.identifier)}\\b`
-    );
-    return (
-      qualifiedRe.test(macroBody) ||
-      ctx.usingNamespaceStd ||
-      ctx.usingStdDecls.has(target.identifier)
-    );
+  if (target.namespacePrefix !== 'std') return true;
+
+  const stdPattern = [...ctx.stdAliases].map(escapeRegExp).join('|');
+  const qualifiedRe = new RegExp(
+    String.raw`\b(?:${stdPattern})\s*::\s*${escapedIdent}\b`
+  );
+  return (
+    qualifiedRe.test(macroBody) ||
+    ctx.usingNamespaceStd ||
+    ctx.usingStdDecls.has(target.identifier)
+  );
+}
+
+type RecordFn = (node: SyntaxNode, target: ParsedBanTarget) => void;
+
+function isImportedStdSymbol(
+  name: string,
+  userDefined: Set<string>,
+  ctx: FileContext
+): boolean {
+  return ctx.usingStdDecls.has(name) || (ctx.usingNamespaceStd && !userDefined.has(name));
+}
+
+function checkKeywordNode(
+  node: SyntaxNode,
+  targets: ParsedBanTarget[],
+  record: RecordFn
+): void {
+  for (const target of targets) {
+    if (
+      target.namespacePrefix === null &&
+      KEYWORD_NODE_MAP[target.identifier]?.includes(node.type)
+    ) {
+      record(node, target);
+    }
   }
-  return true;
+}
+
+function checkMacroNode(
+  node: SyntaxNode,
+  ctx: FileContext,
+  targets: ParsedBanTarget[],
+  record: RecordFn
+): void {
+  if (
+    node.type !== 'identifier' ||
+    node.parent?.type === 'preproc_def' ||
+    node.parent?.type === 'preproc_function_def'
+  ) {
+    return;
+  }
+  const macroBody = ctx.macroAliases.get(node.text);
+  if (!macroBody) return;
+  for (const target of targets) {
+    if (macroExpandsToTarget(macroBody, target, ctx)) {
+      record(node, target);
+    }
+  }
+}
+
+function checkQualifiedNode(
+  node: SyntaxNode,
+  ctx: FileContext,
+  targets: ParsedBanTarget[],
+  record: RecordFn
+): void {
+  if (isInsideUsingDeclaration(node)) return;
+  const parts = getQualifiedParts(node);
+  if (!parts) return;
+  for (const target of targets) {
+    if (parts.name !== target.identifier) continue;
+    const isStdTarget =
+      target.namespacePrefix === 'std' || target.namespacePrefix === null;
+    if (
+      isStdTarget
+        ? ctx.stdAliases.has(parts.scope)
+        : parts.scope === target.namespacePrefix
+    ) {
+      record(node, target);
+    }
+  }
+}
+
+function checkCallNode(
+  node: SyntaxNode,
+  ctx: FileContext,
+  targets: ParsedBanTarget[],
+  record: RecordFn
+): void {
+  const fnNode = node.childForFieldName('function');
+  if (!fnNode) return;
+
+  if (fnNode.type === 'field_expression') {
+    const fieldName = fnNode.childForFieldName('field')?.text;
+    if (!fieldName) return;
+    for (const target of targets) {
+      if (target.namespacePrefix === null && fieldName === target.identifier) {
+        record(node, target);
+      }
+    }
+    return;
+  }
+
+  if (fnNode.type !== 'identifier' && fnNode.type !== 'template_function') return;
+  const fnName =
+    fnNode.type === 'template_function'
+      ? (fnNode.childForFieldName('name')?.text ?? '')
+      : fnNode.text;
+
+  for (const target of targets) {
+    if (fnName !== target.identifier) continue;
+    if (target.namespacePrefix === null && !ctx.userDefinedFunctions.has(fnName)) {
+      record(node, target);
+    } else if (
+      target.namespacePrefix === 'std' &&
+      isImportedStdSymbol(fnName, ctx.userDefinedFunctions, ctx)
+    ) {
+      record(node, target);
+    }
+  }
+}
+
+function checkTypeNode(
+  node: SyntaxNode,
+  ctx: FileContext,
+  targets: ParsedBanTarget[],
+  record: RecordFn
+): void {
+  if (node.parent?.type === 'qualified_identifier') return;
+  const isTypeDeclName =
+    (node.parent?.type === 'struct_specifier' ||
+      node.parent?.type === 'class_specifier') &&
+    node.parent.childForFieldName('name')?.id === node.id;
+  if (isTypeDeclName) return;
+
+  const typeName = node.text;
+  for (const target of targets) {
+    if (typeName !== target.identifier) continue;
+    if (target.namespacePrefix === null && !ctx.userDefinedTypes.has(typeName)) {
+      record(node, target);
+    } else if (
+      target.namespacePrefix === 'std' &&
+      isImportedStdSymbol(typeName, ctx.userDefinedTypes, ctx)
+    ) {
+      record(node, target);
+    }
+  }
 }
 
 function findViolationsInAst(
@@ -203,125 +343,20 @@ function findViolationsInAst(
   const matchedLines = new Set<number>();
   const matchedNames = new Set<string>();
 
-  const record = (node: SyntaxNode, target: ParsedBanTarget) => {
+  const record: RecordFn = (node, target) => {
     matchedLines.add(node.startPosition.row + 1);
     matchedNames.add(target.raw);
   };
 
   walk(root, (node) => {
-    // 0. Banned C++ control-flow keywords (`for`, `while`, `do`, `goto`)
-    for (const target of targets) {
-      if (target.namespacePrefix === null) {
-        const mappedTypes = KEYWORD_NODE_MAP[target.identifier];
-        if (mappedTypes?.includes(node.type)) {
-          record(node, target);
-        }
-      }
-    }
-
-    // 0b. Macro alias invocation (`#define my_sort std::sort` -> `my_sort(...)`)
-    if (
-      node.type === 'identifier' &&
-      node.parent?.type !== 'preproc_def' &&
-      node.parent?.type !== 'preproc_function_def'
-    ) {
-      const macroBody = ctx.macroAliases.get(node.text);
-      if (macroBody) {
-        for (const target of targets) {
-          if (macroExpandsToTarget(macroBody, target, ctx)) {
-            record(node, target);
-          }
-        }
-      }
-    }
-
-    // 1. Qualified identifiers like `std::sort`, `s::sort`, `std::map`
-    if (node.type === 'qualified_identifier' && !isInsideUsingDeclaration(node)) {
-      const parts = getQualifiedParts(node);
-      if (!parts) return;
-      for (const target of targets) {
-        if (parts.name !== target.identifier) continue;
-        if (target.namespacePrefix === 'std' || target.namespacePrefix === null) {
-          if (ctx.stdAliases.has(parts.scope)) {
-            record(node, target);
-          }
-        } else if (parts.scope === target.namespacePrefix) {
-          record(node, target);
-        }
-      }
-      return;
-    }
-
-    // 2. Unqualified calls: `sort(...)`, `qsort(...)`, or banned member calls like `.rbegin()`
-    if (node.type === 'call_expression') {
-      const fnNode = node.childForFieldName('function');
-      if (!fnNode) return;
-      if (fnNode.type === 'field_expression') {
-        const fieldNode = fnNode.childForFieldName('field');
-        const fieldName = fieldNode?.text;
-        if (fieldName) {
-          for (const target of targets) {
-            if (target.namespacePrefix === null && fieldName === target.identifier) {
-              record(node, target);
-            }
-          }
-        }
-        return;
-      }
-      // Ignore qualified calls (handled above).
-      if (fnNode.type === 'identifier' || fnNode.type === 'template_function') {
-        const fnName =
-          fnNode.type === 'template_function'
-            ? (fnNode.childForFieldName('name')?.text ?? '')
-            : fnNode.text;
-        for (const target of targets) {
-          if (fnName !== target.identifier) continue;
-          if (target.namespacePrefix === null) {
-            if (!ctx.userDefinedFunctions.has(fnName)) {
-              record(node, target);
-            }
-          } else if (target.namespacePrefix === 'std') {
-            const importedExplicitly = ctx.usingStdDecls.has(fnName);
-            const importedViaStd =
-              ctx.usingNamespaceStd && !ctx.userDefinedFunctions.has(fnName);
-            if (importedExplicitly || importedViaStd) {
-              record(node, target);
-            }
-          }
-        }
-      }
-      return;
-    }
-
-    // 3. Unqualified type usage when `using namespace std;` or `using std::<type>;` is active
-    if (node.type === 'type_identifier') {
-      // Skip if this type_identifier is already part of a qualified_identifier (e.g. `my::vector`)
-      if (node.parent?.type === 'qualified_identifier') return;
-      // Skip struct/class definition names themselves
-      if (
-        (node.parent?.type === 'struct_specifier' ||
-          node.parent?.type === 'class_specifier') &&
-        node.parent.childForFieldName('name')?.id === node.id
-      ) {
-        return;
-      }
-
-      const typeName = node.text;
-      for (const target of targets) {
-        if (typeName !== target.identifier) continue;
-        if (target.namespacePrefix === null) {
-          if (!ctx.userDefinedTypes.has(typeName)) {
-            record(node, target);
-          }
-        } else if (target.namespacePrefix === 'std') {
-          const importedExplicitly = ctx.usingStdDecls.has(typeName);
-          const importedViaStd =
-            ctx.usingNamespaceStd && !ctx.userDefinedTypes.has(typeName);
-          if (importedExplicitly || importedViaStd) {
-            record(node, target);
-          }
-        }
-      }
+    checkKeywordNode(node, targets, record);
+    checkMacroNode(node, ctx, targets, record);
+    if (node.type === 'qualified_identifier') {
+      checkQualifiedNode(node, ctx, targets, record);
+    } else if (node.type === 'call_expression') {
+      checkCallNode(node, ctx, targets, record);
+    } else if (node.type === 'type_identifier') {
+      checkTypeNode(node, ctx, targets, record);
     }
   });
 
@@ -337,14 +372,6 @@ function findViolationsInAst(
 
 /**
  * Evaluates a batch of `BAN_LIST` constraints against C++ source code using one AST parse.
- *
- * Quy trình 3 bước của Hard Rule:
- * 1. Parse C++ thành cây cú pháp AST trên code đã xóa comment (chỉ parse 1 lần/bài).
- * 2. Thu thập ngữ cảnh file (`collectFileContext`): `using namespace std`, `using std::...`,
- *    alias `namespace s = std`, macro `#define`, và danh sách hàm/type do sinh viên tự viết
- *    (để KHÔNG bắt nhầm các ca bẫy như `void sort(...)` tự cài).
- * 3. Duyệt AST (`findViolationsInAst`) đối chiếu với danh sách tên bị cấm trong backtick;
- *    trích số dòng 1-based và nội dung từ `originalCode`.
  */
 export async function evaluateHardRules(
   constraints: CheckConstraint[],

@@ -32,10 +32,17 @@ export function buildAnonymizedPrompt(req: SemanticRequest): string {
   ].join('\n');
 }
 
+function stripMarkdownFence(trimmed: string): string {
+  if (!trimmed.startsWith('```') || !trimmed.endsWith('```')) {
+    return trimmed;
+  }
+  const firstNewline = trimmed.indexOf('\n');
+  if (firstNewline === -1) return trimmed;
+  return trimmed.slice(firstNewline + 1, -3).trim();
+}
+
 export function parseJsonResponseText(text: string): unknown {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  const candidate = fenced ? fenced[1].trim() : trimmed;
+  const candidate = stripMarkdownFence(text.trim());
   try {
     return JSON.parse(candidate);
   } catch {
