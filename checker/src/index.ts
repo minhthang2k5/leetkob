@@ -7,6 +7,7 @@ import type {
   ModelCallLog
 } from '@leetkob/shared';
 import { classifyConstraint } from './classify';
+import { loadCheckerConfig } from './config';
 import { costCapUnsureVerdicts, isLabCostCapReached } from './cost-cap';
 import { FakeJudge } from './fake-judge';
 import { GeminiJudge } from './gemini-judge';
@@ -32,14 +33,17 @@ export {
 } from './gemini-judge';
 export type { FetchLike, GeminiApiResponse, GeminiJudgeOptions } from './gemini-judge';
 export { bannedNames, classifyConstraint } from './classify';
-export { DEFAULT_LAB_COST_CAP_USD } from './cost-cap';
+export {
+  DEFAULT_LAB_COST_CAP_USD,
+  DEFAULT_TIMEOUT_MS,
+  loadCheckerConfig
+} from './config';
+export type { CheckerConfig, CheckerProvider } from './config';
 export { FakeJudge } from './fake-judge';
 export type { FakeJudgeMode, FakeJudgeOptions } from './fake-judge';
 export { applyGuardrails } from './guardrail';
 export { checkHardRule, evaluateHardRules } from './hard-rules';
 export { splitLines, stripCommentsKeepLines } from './preprocess';
-
-const DEFAULT_TIMEOUT_MS = 30_000;
 
 export interface ExtendedCheckOptions extends CheckOptions {
   /** Sum of persisted ModelCall.costUsd for this lab so far. */
@@ -133,7 +137,7 @@ export async function checkSubmission(
       if (!opts.judge) {
         throw new Error('SemanticJudge is required when modelOff is false');
       }
-      const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+      const timeoutMs = opts.timeoutMs ?? loadCheckerConfig().timeoutMs;
       // Gom tất cả ràng buộc SEMANTIC vào ĐÚNG 1 lần gọi model/bài (kèm code đã xóa comment).
       const req = {
         statement: input.statement,

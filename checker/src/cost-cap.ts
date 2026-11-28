@@ -1,18 +1,18 @@
 import type { CheckConstraint, CheckVerdict } from '@leetkob/shared';
+import { DEFAULT_LAB_COST_CAP_USD, loadCheckerConfig } from './config';
 
-/** Default per-lab spend cap in USD (brief, section 3; contract A.3 rule 4). */
-export const DEFAULT_LAB_COST_CAP_USD = 3.0;
+export { DEFAULT_LAB_COST_CAP_USD } from './config';
 
 /**
  * Kiểm tra tổng chi phí đã dùng của cả lab (do worker cộng dồn từ DB) có chạm trần chưa.
- * Giúp ngăn một lab 80+ sinh viên bị lỗi lặp làm tốn quá ngân sách.
+ * Ưu tiên `labCapUsd` truyền vào -> biến môi trường `CHECKER_LAB_COST_CAP_USD` -> mặc định $3.0.
  */
 export function isLabCostCapReached(
   labSpentUsd: number | undefined,
   labCapUsd: number | undefined
 ): boolean {
   const spent = labSpentUsd ?? 0;
-  const cap = labCapUsd ?? DEFAULT_LAB_COST_CAP_USD;
+  const cap = labCapUsd ?? loadCheckerConfig().labCapUsd ?? DEFAULT_LAB_COST_CAP_USD;
   return spent >= cap;
 }
 

@@ -3,6 +3,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join, resolve } from 'node:path';
 import type { CheckConstraint, ModelCallLog, SemanticJudge } from '@leetkob/shared';
 import { AnthropicJudge } from './anthropic-judge';
+import {
+  DEFAULT_GEMINI_CLI_DELAY_MS,
+  DEFAULT_GEMINI_CLI_TIMEOUT_MS,
+  loadCheckerConfig
+} from './config';
 import { GeminiJudge } from './gemini-judge';
 import { checkSubmission } from './index';
 
@@ -120,22 +125,35 @@ export async function runCli(opts: CliOptions): Promise<{
     throw new Error(`Invalid dataset directory: ${root}`);
   }
 
-  // Mặc định ưu tiên Gemini nếu có GEMINI_API_KEY (và không truyền --provider anthropic).
-  // Với Gemini Free Tier, tự động thêm delay giữa các bài để tránh lỗi 429 rate-limit.
+  const cfg = loadCheckerConfig();
+  // Mặc định ưu tiên theo CHECKER_PROVIDER / --provider; nếu 'auto' thì chọn Gemini
+  // khi có GEMINI_API_KEY (và không có ANTHROPIC_API_KEY).
+  const resolvedProvider =
+    opts.provider ?? (cfg.provider === 'auto' ? undefined : cfg.provider);
   const useGemini =
-    opts.provider === 'gemini' ||
-    (!opts.provider &&
-      Boolean(process.env.GEMINI_API_KEY) &&
-      !process.env.ANTHROPIC_API_KEY);
+    resolvedProvider === 'gemini' ||
+    (!resolvedProvider && Boolean(cfg.geminiApiKey) && !cfg.anthropicApiKey);
 
   const judge = opts.modelOff
     ? undefined
     : (opts.judge ??
       (useGemini
-        ? new GeminiJudge({ maxRetries: 3, retryDelayMs: 15_000 })
+        ? new GeminiJudge({
+            maxRetries: cfg.maxRetries,
+            retryDelayMs: cfg.retryDelayMs
+          })
         : new AnthropicJudge()));
-  const delayMs = opts.delayMs ?? (useGemini && !opts.modelOff ? 6500 : 0);
-  const timeoutMs = opts.timeoutMs ?? (useGemini ? 120_000 : undefined);
+  const delayMs =
+    opts.delayMs ??
+    cfg.delayMs ??
+    (useGemini && !opts.modelOff ? DEFAULT_GEMINI_CLI_DELAY_MS : 0);
+  const timeoutMs =
+    opts.timeoutMs ??
+    (process.env.CHECKER_TIMEOUT_MS
+      ? cfg.timeoutMs
+      : useGemini
+        ? DEFAULT_GEMINI_CLI_TIMEOUT_MS
+        : cfg.timeoutMs);
   const problemIds = readdirSync(problemsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name)
