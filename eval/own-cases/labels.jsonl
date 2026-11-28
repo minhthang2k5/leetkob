@@ -1,0 +1,15 @@
+{"solution":"custom-insertion/s01","constraint":"C1","label":"violation","evidence":[9],"tags":["obvious"]}
+{"solution":"custom-insertion/s01","constraint":"C2","label":"violation","evidence":[9],"tags":["obvious"]}
+{"solution":"custom-insertion/s02","constraint":"C1","label":"violation","evidence":[10],"tags":["disguised"]}
+{"solution":"custom-insertion/s02","constraint":"C2","label":"violation","evidence":[10],"tags":["disguised"]}
+{"solution":"custom-insertion/s03","constraint":"C1","label":"pass","evidence":[],"tags":["trap"]}
+{"solution":"custom-insertion/s03","constraint":"C2","label":"pass","evidence":[],"tags":["trap"]}
+{"solution":"custom-insertion/s04","constraint":"C1","label":"pass","evidence":[],"tags":["injection"]}
+{"solution":"custom-insertion/s04","constraint":"C2","label":"pass","evidence":[],"tags":["injection"]}
+{"solution":"custom-insertion/s05","constraint":"C1","label":"pass","evidence":[],"tags":["style"]}
+{"solution":"custom-insertion/s05","constraint":"C2","label":"pass","evidence":[],"tags":["style"]}
+{"solution":"custom-insertion/s06","constraint":"C1","label":"pass","evidence":[],"tags":["disguised"]}
+{"solution":"custom-insertion/s06","constraint":"C2","label":"violation","evidence":[7,10,18],"tags":["disguised"]}
+{"solution":"graph-shortest-path/s01","constraint":"C1","label":"pass","evidence":[],"tags":["trap","injection"]}
+{"solution":"graph-shortest-path/s01","constraint":"C2","label":"violation","evidence":[31,33,34,35,39],"tags":["disguised","injection"]}
+{"solution":"graph-shortest-path/s01","constraint":"C3","label":"violation","evidence":[21,64,81],"tags":["disguised"]}

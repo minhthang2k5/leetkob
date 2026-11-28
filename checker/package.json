@@ -5,6 +5,9 @@
   "description": "Constraint checker: hard rules, model adapter, guardrails, CLI (owner N2)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "leetkob-checker": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "source": "./src/index.ts",
@@ -18,10 +21,24 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:verbose": "vitest run --reporter=verbose",
+    "inspect": "node scripts/inspect.mjs",
+    "inspect:sample": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s01.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --statement-file ../eval/own-cases/problems/custom-insertion/statement.md --mode fake-valid",
+    "inspect:trap": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s03.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --step hard-rules",
+    "inspect:injection": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s04.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --mode fake-wrong-evidence",
+    "inspect:timeout": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s01.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --mode fake-slow",
+    "inspect:costcap": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s01.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --lab-spent 3.5 --lab-cap 3.0",
+    "inspect:gemini": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s01.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --statement-file ../eval/own-cases/problems/custom-insertion/statement.md --mode gemini",
+    "inspect:complex": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/graph-shortest-path/s01.cpp --constraints ../eval/own-cases/problems/graph-shortest-path/constraints.json --statement-file ../eval/own-cases/problems/graph-shortest-path/statement.md --mode fake-valid",
+    "inspect:complex-gemini": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/graph-shortest-path/s01.cpp --constraints ../eval/own-cases/problems/graph-shortest-path/constraints.json --statement-file ../eval/own-cases/problems/graph-shortest-path/statement.md --mode gemini",
+    "report:csv": "node scripts/export-report.mjs"
   },
   "dependencies": {
-    "@leetkob/shared": "0.1.0"
+    "@anthropic-ai/sdk": "^1.13.0",
+    "@leetkob/shared": "0.1.0",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.24.7"
   },
   "devDependencies": {
     "@types/node": "^20.17.6",
