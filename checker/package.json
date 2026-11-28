@@ -21,7 +21,8 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "inspect": "node scripts/inspect.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.13.0",
