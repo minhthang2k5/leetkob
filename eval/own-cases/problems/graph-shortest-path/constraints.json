@@ -1,0 +1,17 @@
+[
+  {
+    "id": "C1",
+    "text": "Do not use `std::priority_queue` or `std::set`.",
+    "deduction": 3
+  },
+  {
+    "id": "C2",
+    "text": "Implement Dijkstra's algorithm with a real O(log V) binary min-heap (not an O(V) linear scan disguised as a heap).",
+    "deduction": 4
+  },
+  {
+    "id": "C3",
+    "text": "Free every dynamically allocated buffer (new/new[]) before program exit so there are no memory leaks.",
+    "deduction": 3
+  }
+]

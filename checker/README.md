@@ -182,6 +182,7 @@ Tất cả các kịch bản dưới đây đều đã được cấu hình sẵ
 | **4. AI bị treo quá thời gian (Timeout)** | `npm run inspect:timeout -w @leetkob/checker` | `calls[0].status = "TIMEOUT"`, `C2: UNSURE` (`GUARDRAIL`, `reason: "timeout"`). |
 | **5. Lab chạm trần chi phí (`$3.5 >= $3.0`)** | `npm run inspect:costcap -w @leetkob/checker` | `calls = []` (không gọi AI), `C2: UNSURE` (`GUARDRAIL`, `reason: "lab cost cap reached"`). |
 | **6. Gọi AI Gemini thật** *(cần `checker/.env`)* | `npm run inspect:gemini -w @leetkob/checker` | `C1: VIOLATION` (`HARD_RULE`), `C2: VIOLATION` (`MODEL`, có `requestId` & `costUsd` thật). |
+| **7. Case phức tạp Dijkstra + Heap giả + Memory Leak (Gemini thật)** | `npm run inspect:complex-gemini -w @leetkob/checker` | `C1: PASS` (`HARD_RULE`), `C2: VIOLATION` (`MODEL`, bắt `pop()` duyệt tuyến tính $O(V)$), `C3: VIOLATION` (`MODEL`, bắt leak `new HeapNode[cap]`). |
 
 ---
 

@@ -30,6 +30,8 @@
     "inspect:timeout": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s01.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --mode fake-slow",
     "inspect:costcap": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s01.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --lab-spent 3.5 --lab-cap 3.0",
     "inspect:gemini": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s01.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --statement-file ../eval/own-cases/problems/custom-insertion/statement.md --mode gemini",
+    "inspect:complex": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/graph-shortest-path/s01.cpp --constraints ../eval/own-cases/problems/graph-shortest-path/constraints.json --statement-file ../eval/own-cases/problems/graph-shortest-path/statement.md --mode fake-valid",
+    "inspect:complex-gemini": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/graph-shortest-path/s01.cpp --constraints ../eval/own-cases/problems/graph-shortest-path/constraints.json --statement-file ../eval/own-cases/problems/graph-shortest-path/statement.md --mode gemini",
     "report:csv": "node scripts/export-report.mjs"
   },
   "dependencies": {
