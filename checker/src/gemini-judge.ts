@@ -8,7 +8,37 @@ import {
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_MAX_OUTPUT_TOKENS = 1024;
+const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
+
+const GEMINI_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    verdicts: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          constraintCode: { type: 'STRING' },
+          verdict: { type: 'STRING', enum: ['PASS', 'VIOLATION', 'UNSURE'] },
+          evidence: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                line: { type: 'INTEGER' },
+                text: { type: 'STRING' }
+              },
+              required: ['line', 'text']
+            }
+          },
+          reason: { type: 'STRING', nullable: true }
+        },
+        required: ['constraintCode', 'verdict', 'evidence', 'reason']
+      }
+    }
+  },
+  required: ['verdicts']
+};
 
 interface GeminiPricing {
   inputPerMillionUsd: number;
@@ -114,7 +144,8 @@ export class GeminiJudge implements SemanticJudge {
             generationConfig: {
               temperature: 0,
               maxOutputTokens: this.maxOutputTokens,
-              responseMimeType: 'application/json'
+              responseMimeType: 'application/json',
+              responseSchema: GEMINI_RESPONSE_SCHEMA
             }
           })
         });
