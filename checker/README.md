@@ -153,91 +153,121 @@ Copy-Item checker\.env.example checker\.env
 
 ---
 
-## 6. Hướng dẫn Test & Kiểm tra Input / Output chi tiết
+## 6. Hướng dẫn Test, Kiểm tra Input/Output & Xuất báo cáo Excel
 
-Chạy mọi lệnh dưới đây tại thư mục gốc `leetkob/` (nếu vừa sửa code, chạy `npm run build:libs` trước).
+> **Lưu ý chung**: Mọi lệnh dưới đây chạy tại thư mục gốc `leetkob/`. Nếu bạn vừa sửa code trong `src/`, chạy `npm run build:libs` trước khi chạy CLI/Inspect.
 
-### A. Unit & Integration Tests (Vitest — 52 tests, không cần mạng/key)
-```powershell
-$env:MODEL_OFF='1'
-npm test -w @leetkob/checker -- --reporter=verbose
-npm run typecheck -w @leetkob/checker
-npm run lint -w @leetkob/checker
-npm run format:check -w @leetkob/checker
-```
+### Bảng tra cứu nhanh các lệnh test (gõ gọn, không cần nhớ cờ dài)
 
-### B. Soi từng tầng Input → Output với `scripts/inspect.mjs`
-Công cụ `checker/scripts/inspect.mjs` cho phép đổi file `.cpp`, đổi rule, đổi chế độ AI và in rõ 5 tầng xử lý:
+| Mục đích | Lệnh chạy trên **PowerShell** | Lệnh chạy trên **CMD (Command Prompt)** |
+|---|---|---|
+| **1. Chạy toàn bộ 52 unit test** (chi tiết từng test) | `$env:MODEL_OFF='1'; npm run test:verbose -w @leetkob/checker` | `set MODEL_OFF=1 && npm run test:verbose -w @leetkob/checker` |
+| **2. Kiểm tra type, lint, format** | `npm run typecheck -w @leetkob/checker; npm run lint -w @leetkob/checker; npm run format:check -w @leetkob/checker` | `npm run typecheck -w @leetkob/checker && npm run lint -w @leetkob/checker && npm run format:check -w @leetkob/checker` |
+| **3. Soi nhanh 5 tầng trên bài mẫu** (`s01.cpp`) | `npm run inspect:sample -w @leetkob/checker` | `npm run inspect:sample -w @leetkob/checker` |
+| **4. Chạy CLI chấm `eval/own-cases`** (offline) | `node checker/dist/cli.js eval/own-cases --model-off --out tmp-own.jsonl` | `node checker/dist/cli.js eval/own-cases --model-off --out tmp-own.jsonl` |
+| **5. Chấm điểm bằng `eval.mjs`** | `node eval/leetkob-eval/eval.mjs --data eval/own-cases --predictions tmp-own.jsonl` | `node eval/leetkob-eval/eval.mjs --data eval/own-cases --predictions tmp-own.jsonl` |
+| **6. Xuất báo cáo Excel (`.csv`)** | `node checker/scripts/export-report.mjs --data eval/own-cases --predictions tmp-own.jsonl --out tmp-report.csv` | `node checker/scripts/export-report.mjs --data eval/own-cases --predictions tmp-own.jsonl --out tmp-report.csv` |
 
-#### Ví dụ 1: Soi đầy đủ 5 tầng với bài vi phạm `std::sort` (`s01.cpp`)
-```powershell
-node checker/scripts/inspect.mjs `
-  --code eval/own-cases/solutions/custom-insertion/s01.cpp `
-  --constraints eval/own-cases/problems/custom-insertion/constraints.json `
-  --statement-file eval/own-cases/problems/custom-insertion/statement.md `
-  --mode fake-valid
+---
+
+### A. Các kịch bản test hay gặp (chạy 1 lệnh ngắn, không cần gõ cờ dài)
+
+Tất cả các kịch bản dưới đây đều đã được cấu hình sẵn trong `checker/package.json` (chạy được giống nhau trên cả **CMD** và **PowerShell** tại thư mục `leetkob/`):
+
+| Kịch bản hay gặp | Lệnh chạy (1 dòng) | Kết quả kỳ vọng để đối chiếu |
+|---|---|---|
+| **1. Bắt lỗi `std::sort` + soi đủ 5 tầng** | `npm run inspect:sample -w @leetkob/checker` | `C1: VIOLATION` (`HARD_RULE`, dòng 9), `C2` gửi `FakeJudge` (`C1` không xuất hiện trong prompt). |
+| **2. Ca bẫy hợp lệ (`my::sort` + `std::swap`)** | `npm run inspect:trap -w @leetkob/checker` | `C1: PASS` (`HARD_RULE`) — chứng minh AST **không phạt nhầm** hàm tự viết. |
+| **3. Prompt-Injection + AI bịa dòng** | `npm run inspect:injection -w @leetkob/checker` | Stage 1 xóa sạch comment injection; `C1: PASS`; `C2: UNSURE` (`GUARDRAIL`, `evidence line 34 does not match`). |
+| **4. AI bị treo quá thời gian (Timeout)** | `npm run inspect:timeout -w @leetkob/checker` | `calls[0].status = "TIMEOUT"`, `C2: UNSURE` (`GUARDRAIL`, `reason: "timeout"`). |
+| **5. Lab chạm trần chi phí (`$3.5 >= $3.0`)** | `npm run inspect:costcap -w @leetkob/checker` | `calls = []` (không gọi AI), `C2: UNSURE` (`GUARDRAIL`, `reason: "lab cost cap reached"`). |
+| **6. Gọi AI Gemini thật** *(cần `checker/.env`)* | `npm run inspect:gemini -w @leetkob/checker` | `C1: VIOLATION` (`HARD_RULE`), `C2: VIOLATION` (`MODEL`, có `requestId` & `costUsd` thật). |
+
+---
+
+### A2. Tự tùy biến đầu vào bằng `scripts/inspect.mjs` (khi muốn thử file `.cpp` hoặc rule mới)
+
+**Giải thích các tham số của `inspect.mjs`**:
+- `--code <file.cpp>`: File code C++ sinh viên nộp cần kiểm tra *(bắt buộc)*.
+- `--constraints <file.json>`: File danh sách ràng buộc dạng JSON (hoặc thay bằng `--rule "..."` để gõ nhanh trên dòng lệnh).
+- `--statement-file <file.md>` / `--statement "..."`: Đề bài của lab *(tùy chọn)*.
+- `--mode <chế độ>`: Chọn cách chấm ràng buộc `SEMANTIC`:
+  - `fake-valid`: AI giả lập trả kết quả hợp lệ *(mặc định, 0 cần key)*.
+  - `fake-wrong-evidence`: Giả lập AI bịa dòng → kiểm chứng Guardrail chặn về `UNSURE`.
+  - `fake-invalid-json` / `fake-slow`: Giả lập AI trả JSON lỗi / bị timeout.
+  - `off`: Tắt AI (`MODEL_OFF=1`).
+  - `gemini` / `anthropic`: Gọi AI thật (đọc key từ `checker/.env`).
+- `--step <tầng>`: Chọn in toàn bộ (`all`) hay chỉ 1 tầng (`preprocess`, `classify`, `hard-rules`, `prompt`, `full`).
+- `--lab-spent <usd>` / `--lab-cap <usd>`: Giả lập kiểm tra trần chi phí mỗi lab.
+
+#### Ví dụ 1: Soi nhanh 5 tầng trên bài mẫu (1 dòng lệnh gọn nhất)
+```cmd
+npm run inspect:sample -w @leetkob/checker
 ```
 - **Kỳ vọng**: Stage 2 tách `C1` (`BAN_LIST`) & `C2` (`SEMANTIC`); Stage 3 bắt `C1: VIOLATION` tại dòng 9 (`std::sort(a, a + n);`); Stage 4 chỉ gửi `C2` cho AI.
 
 #### Ví dụ 2: Test bẫy Prompt-Injection + Guardrail chặn AI bịa dòng (`s04.cpp`)
-```powershell
-node checker/scripts/inspect.mjs `
-  --code eval/own-cases/solutions/custom-insertion/s04.cpp `
-  --constraints eval/own-cases/problems/custom-insertion/constraints.json `
-  --mode fake-wrong-evidence
+```cmd
+node checker/scripts/inspect.mjs --code eval/own-cases/solutions/custom-insertion/s04.cpp --constraints eval/own-cases/problems/custom-insertion/constraints.json --mode fake-wrong-evidence
 ```
-- **Kỳ vọng**: Stage 1 xóa sạch 2 dòng comment injection (dòng 2–3) nhưng giữ `int main()` đúng dòng 5; Stage 3 bỏ qua chuỗi `"std::sort(a, a + n);"` → `C1: PASS`; Stage 5 Guardrail chặn AI bịa dòng 34 → `C2: UNSURE` (`source: "GUARDRAIL"`, `reason: "evidence line 34 does not match"`).
+- **Kỳ vọng**: Stage 1 xóa sạch 2 dòng comment injection (dòng 2–3) nhưng giữ `int main()` đúng dòng 5; Stage 3 bỏ qua chuỗi `"std::sort(a, a + n);"` → `C1: PASS`; Stage 5 Guardrail chặn AI bịa dòng 34 → `C2: UNSURE` (`reason: "evidence line 34 does not match"`).
 
-#### Ví dụ 3: Tự truyền rule trực tiếp trên terminal & test vượt Cost Cap
-```powershell
-# Tự truyền rule cấm vòng lặp for và std::sort, chế độ offline
-node checker/scripts/inspect.mjs `
-  --code eval/own-cases/solutions/custom-insertion/s01.cpp `
-  --rule 'Do not use `std::sort`.' `
-  --rule 'Do not use `for`.' `
-  --mode off
+#### Ví dụ 3: Tự gõ rule mới trên CMD & test vượt trần chi phí (`$3/lab`)
+```cmd
+:: Tự gõ rule cấm std::sort và cấm vòng lặp for (chế độ offline)
+node checker/scripts/inspect.mjs --code eval/own-cases/solutions/custom-insertion/s01.cpp --rule "Do not use `std::sort`." --rule "Do not use `for`." --mode off
 
-# Giả lập lab đã tiêu $3.5 vượt trần $3.0 -> không gọi AI
-node checker/scripts/inspect.mjs `
-  --code eval/own-cases/solutions/custom-insertion/s01.cpp `
-  --constraints eval/own-cases/problems/custom-insertion/constraints.json `
-  --lab-spent 3.5 --lab-cap 3.0
+:: Giả lập lab đã tiêu $3.5 vượt trần $3.0 -> không gọi AI
+node checker/scripts/inspect.mjs --code eval/own-cases/solutions/custom-insertion/s01.cpp --constraints eval/own-cases/problems/custom-insertion/constraints.json --lab-spent 3.5 --lab-cap 3.0
 ```
 
-#### Ví dụ 4: Gọi AI thật (Gemini / Anthropic) hoặc chỉ xem riêng 1 tầng (`--step`)
-```powershell
-# Gọi Gemini thật (đọc GEMINI_API_KEY từ checker/.env)
-node checker/scripts/inspect.mjs `
-  --code eval/own-cases/solutions/custom-insertion/s01.cpp `
-  --constraints eval/own-cases/problems/custom-insertion/constraints.json `
-  --mode gemini
+#### Ví dụ 4: Gọi AI thật (Gemini) hoặc chỉ soi riêng tầng AST Hard Rules
+```cmd
+:: Gọi Gemini thật (đọc GEMINI_API_KEY từ checker/.env)
+node checker/scripts/inspect.mjs --code eval/own-cases/solutions/custom-insertion/s01.cpp --constraints eval/own-cases/problems/custom-insertion/constraints.json --mode gemini
 
-# Chỉ soi riêng tầng AST Hard Rules trên bài bẫy my::sort (s03.cpp)
-node checker/scripts/inspect.mjs `
-  --code eval/own-cases/solutions/custom-insertion/s03.cpp `
-  --constraints eval/own-cases/problems/custom-insertion/constraints.json `
-  --step hard-rules
+:: Chỉ soi riêng tầng AST Hard Rules trên bài bẫy my::sort (s03.cpp)
+node checker/scripts/inspect.mjs --code eval/own-cases/solutions/custom-insertion/s03.cpp --constraints eval/own-cases/problems/custom-insertion/constraints.json --step hard-rules
 ```
 
-### C. System Test qua CLI + `eval.mjs`
+---
+
+### B. Xuất báo cáo Excel (`.csv`) để rà soát trực quan
+Thay vì đọc file `.jsonl` thô trên terminal, bạn có thể xuất thẳng ra file **`.csv` (UTF-8 BOM, mở trực tiếp bằng Microsoft Excel / Google Sheets)** gồm đủ cột: `solution`, `constraint`, `constraint_text`, `tags`, `expected_label`, `expected_lines`, `predicted_verdict`, `predicted_evidence`, `result_status` (`CAUGHT` / `OK` / `WRONGFUL_DEDUCTION` / `MISSED_VIOLATION` / `UNSURE`):
+
+```cmd
+:: Bước 1: Chạy checker CLI (bỏ --model-off nếu muốn gọi AI thật từ checker/.env)
+node checker/dist/cli.js eval/own-cases --model-off --out tmp-own-preds.jsonl
+
+:: Bước 2: Xuất ra file Excel CSV
+node checker/scripts/export-report.mjs --data eval/own-cases --predictions tmp-own-preds.jsonl --out tmp-own-report.csv
+
+:: Bước 3: Mở file CSV bằng Excel (trên Windows CMD/PowerShell)
+start tmp-own-report.csv
+```
+
+---
+
+### C. Chạy Eval chuẩn trên bộ Dev Set của giảng viên (`eval/leetkob-eval`)
 ```powershell
-# Chạy trên own-cases (offline thêm --model-off; chạy AI thật thì bỏ --model-off)
 Remove-Item Env:MODEL_OFF -ErrorAction SilentlyContinue
-node checker/dist/cli.js eval/own-cases --out $env:TEMP\own-preds.jsonl --calls-out $env:TEMP\own-calls.jsonl
-node eval/leetkob-eval/eval.mjs --data eval/own-cases --predictions $env:TEMP\own-preds.jsonl
-
-# Chạy trên bộ dev set của giảng viên và lưu vào eval/runs/<date>/
 mkdir eval\runs\2026-11-28 -Force
+
+# 1. Chấm 47 bài (102 cặp) -> xuất predictions.jsonl và calls.jsonl
 node checker/dist/cli.js eval/leetkob-eval --out eval/runs/2026-11-28/predictions.jsonl --calls-out eval/runs/2026-11-28/calls.jsonl
+
+# 2. Chấm 3 chỉ số chuẩn (wrongful=0, recall>=90%, unsure<=20%)
 node eval/leetkob-eval/eval.mjs --data eval/leetkob-eval --predictions eval/runs/2026-11-28/predictions.jsonl --json eval/runs/2026-11-28/summary.json
+
+# 3. (Tùy chọn) Xuất báo cáo Excel để rà soát các ca sai / unsure
+node checker/scripts/export-report.mjs --data eval/leetkob-eval --predictions eval/runs/2026-11-28/predictions.jsonl --out eval/runs/2026-11-28/report.csv
 ```
+
+---
 
 ### D. System Test trong Docker cô lập mạng (`--network none`)
 ```powershell
 docker build -f checker/Dockerfile -t leetkob-checker .
-docker run --rm --network none -e MODEL_OFF=1 `
-  -v "${PWD}/eval/own-cases:/data:ro" `
-  -v "${PWD}/tmp-out:/out" `
-  leetkob-checker /data --out /out/predictions.jsonl
+docker run --rm --network none -e MODEL_OFF=1 -v "${PWD}/eval/own-cases:/data:ro" -v "${PWD}/tmp-out:/out" leetkob-checker /data --out /out/predictions.jsonl
 Get-Content tmp-out\predictions.jsonl
 ```

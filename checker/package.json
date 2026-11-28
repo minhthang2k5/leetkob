@@ -22,7 +22,15 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "inspect": "node scripts/inspect.mjs"
+    "test:verbose": "vitest run --reporter=verbose",
+    "inspect": "node scripts/inspect.mjs",
+    "inspect:sample": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s01.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --statement-file ../eval/own-cases/problems/custom-insertion/statement.md --mode fake-valid",
+    "inspect:trap": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s03.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --step hard-rules",
+    "inspect:injection": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s04.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --mode fake-wrong-evidence",
+    "inspect:timeout": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s01.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --mode fake-slow",
+    "inspect:costcap": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s01.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --lab-spent 3.5 --lab-cap 3.0",
+    "inspect:gemini": "node scripts/inspect.mjs --code ../eval/own-cases/solutions/custom-insertion/s01.cpp --constraints ../eval/own-cases/problems/custom-insertion/constraints.json --statement-file ../eval/own-cases/problems/custom-insertion/statement.md --mode gemini",
+    "report:csv": "node scripts/export-report.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.13.0",
